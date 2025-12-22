@@ -199,79 +199,239 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setNotificationsOpen((v) => !v)}
-                style={{ padding: '10px 12px' }}
+                style={{
+                  padding: '10px 12px',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
               >
-                {t('notifications')}
-                {unreadCount > 0 ? ` (${unreadCount})` : ''}
+                <span>🔔</span>
+                <span>{t('notifications')}</span>
+                {unreadCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      borderRadius: '10px',
+                      padding: '2px 6px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      minWidth: '18px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </button>
               {notificationsOpen ? (
-                <div
-                  className="sak-card"
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 'calc(100% + 8px)',
-                    width: 360,
-                    maxWidth: '80vw',
-                    padding: 10
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <strong style={{ flex: 1 }}>{t('notifications')}</strong>
-                    <button
-                      onClick={async () => {
-                        await markAllNotificationsRead().catch(() => undefined)
-                        await refreshNotifications().catch(() => undefined)
-                        await refreshUnreadCount().catch(() => undefined)
+                <>
+                  <div
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      zIndex: 9998
+                    }}
+                    onClick={() => setNotificationsOpen(false)}
+                  />
+                  <div
+                    className="sak-card"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 'calc(100% + 8px)',
+                      width: 400,
+                      maxWidth: '90vw',
+                      maxHeight: '70vh',
+                      padding: 0,
+                      zIndex: 9999,
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '12px 16px',
+                        borderBottom: '2px solid #e5e7eb',
+                        backgroundColor: '#f9fafb'
                       }}
                     >
-                      {t('markAllRead')}
-                    </button>
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <div className="muted" style={{ padding: 8 }}>
-                      {t('noNotifications')}
+                      <strong style={{ flex: 1, fontSize: '16px' }}>
+                        {t('notifications')} {unreadCount > 0 && `(${unreadCount})`}
+                      </strong>
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={async () => {
+                            await markAllNotificationsRead().catch(() => undefined)
+                            await refreshNotifications().catch(() => undefined)
+                            await refreshUnreadCount().catch(() => undefined)
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '13px',
+                            backgroundColor: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {t('markAllRead')}
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {notifications.map((n) => {
-                        const isUnread = !n.readAt
-                        return (
-                          <div
-                            key={n.id}
-                            className="sak-card"
-                            style={{ padding: 10 }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 900 }}>
-                                  {isUnread ? '• ' : ''}
-                                  {n.title}
-                                </div>
-                                {n.body ? <div className="muted">{n.body}</div> : null}
-                                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                                  {new Date(n.createdAt).toLocaleString()}
+
+                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: '500px' }}>
+                      {notifications.length === 0 ? (
+                        <div
+                          style={{
+                            padding: '40px 16px',
+                            textAlign: 'center',
+                            opacity: 0.6
+                          }}
+                        >
+                          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔕</div>
+                          <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                            {t('noNotifications')}
+                          </div>
+                          <div style={{ fontSize: '14px' }}>You're all caught up!</div>
+                        </div>
+                      ) : (
+                        <div>
+                          {notifications.map((n, idx) => {
+                            const isUnread = !n.readAt
+                            const getNotificationIcon = (title: string) => {
+                              const t = title.toLowerCase()
+                              if (t.includes('lead')) return '👤'
+                              if (t.includes('task')) return '✓'
+                              if (t.includes('call')) return '📞'
+                              if (t.includes('message')) return '💬'
+                              if (t.includes('success') || t.includes('won')) return '🎉'
+                              if (t.includes('urgent') || t.includes('hot')) return '🔥'
+                              return '📢'
+                            }
+                            return (
+                              <div
+                                key={n.id}
+                                style={{
+                                  padding: '12px 16px',
+                                  borderBottom: idx < notifications.length - 1 ? '1px solid #e5e7eb' : 'none',
+                                  backgroundColor: isUnread ? '#eff6ff' : 'white',
+                                  transition: 'background-color 0.2s',
+                                  cursor: 'pointer',
+                                  position: 'relative'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isUnread) e.currentTarget.style.backgroundColor = '#f9fafb'
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isUnread) e.currentTarget.style.backgroundColor = 'white'
+                                }}
+                              >
+                                {isUnread && (
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      left: '8px',
+                                      top: '50%',
+                                      transform: 'translateY(-50%)',
+                                      width: '8px',
+                                      height: '8px',
+                                      borderRadius: '50%',
+                                      backgroundColor: '#3b82f6'
+                                    }}
+                                  />
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'start', gap: 12, marginLeft: isUnread ? '12px' : '0' }}>
+                                  <div
+                                    style={{
+                                      fontSize: '24px',
+                                      lineHeight: 1,
+                                      marginTop: '2px'
+                                    }}
+                                  >
+                                    {getNotificationIcon(n.title)}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div
+                                      style={{
+                                        fontWeight: isUnread ? '700' : '600',
+                                        marginBottom: '4px',
+                                        color: '#111827'
+                                      }}
+                                    >
+                                      {n.title}
+                                    </div>
+                                    {n.body && (
+                                      <div
+                                        style={{
+                                          fontSize: '14px',
+                                          color: '#6b7280',
+                                          marginBottom: '6px',
+                                          lineHeight: '1.4'
+                                        }}
+                                      >
+                                        {n.body}
+                                      </div>
+                                    )}
+                                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                                      {(() => {
+                                        const date = new Date(n.createdAt)
+                                        const now = new Date()
+                                        const diff = now.getTime() - date.getTime()
+                                        const minutes = Math.floor(diff / 60000)
+                                        const hours = Math.floor(minutes / 60)
+                                        const days = Math.floor(hours / 24)
+                                        
+                                        if (minutes < 1) return 'Just now'
+                                        if (minutes < 60) return `${minutes}m ago`
+                                        if (hours < 24) return `${hours}h ago`
+                                        if (days < 7) return `${days}d ago`
+                                        return date.toLocaleDateString()
+                                      })()}
+                                    </div>
+                                  </div>
+                                  {isUnread && (
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation()
+                                        await markNotificationRead(n.id).catch(() => undefined)
+                                        await refreshNotifications().catch(() => undefined)
+                                        await refreshUnreadCount().catch(() => undefined)
+                                      }}
+                                      style={{
+                                        padding: '4px 8px',
+                                        fontSize: '12px',
+                                        backgroundColor: 'white',
+                                        color: '#3b82f6',
+                                        border: '1px solid #3b82f6',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    >
+                                      ✓
+                                    </button>
+                                  )}
                                 </div>
                               </div>
-                              {isUnread ? (
-                                <button
-                                  onClick={async () => {
-                                    await markNotificationRead(n.id).catch(() => undefined)
-                                    await refreshNotifications().catch(() => undefined)
-                                    await refreshUnreadCount().catch(() => undefined)
-                                  }}
-                                >
-                                  {t('markRead')}
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        )
-                      })}
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}
@@ -941,6 +1101,9 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
   const [channelFilter, setChannelFilter] = useState<string>('ALL')
+  const [qualificationFilter, setQualificationFilter] = useState<string>('ALL')
+  const [sortBy, setSortBy] = useState<string>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
   const [salesmen, setSalesmen] = useState<any[]>([])
   const [bulkAction, setBulkAction] = useState<'assign' | 'status' | null>(null)
@@ -1014,7 +1177,7 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
   }
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
+    let filtered = leads.filter((l) => {
       // Search term filter (name, phone, email, id)
       const term = searchTerm.toLowerCase()
       const matchesSearch =
@@ -1033,9 +1196,46 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
       // Channel filter
       const matchesChannel = channelFilter === 'ALL' || l.channel === channelFilter
 
-      return matchesSearch && matchesStatus && matchesHeat && matchesChannel
+      // Qualification filter
+      const matchesQualification = qualificationFilter === 'ALL' || l.qualificationLevel === qualificationFilter
+
+      return matchesSearch && matchesStatus && matchesHeat && matchesChannel && matchesQualification
     })
-  }, [leads, searchTerm, statusFilter, heatFilter, channelFilter])
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aVal: any, bVal: any
+      
+      switch (sortBy) {
+        case 'createdAt':
+          aVal = new Date(a.createdAt).getTime()
+          bVal = new Date(b.createdAt).getTime()
+          break
+        case 'score':
+          aVal = a.score || 0
+          bVal = b.score || 0
+          break
+        case 'name':
+          aVal = (a.fullName || a.phone || '').toLowerCase()
+          bVal = (b.fullName || b.phone || '').toLowerCase()
+          break
+        case 'lastActivity':
+          aVal = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0
+          bVal = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0
+          break
+        default:
+          return 0
+      }
+      
+      if (sortOrder === 'asc') {
+        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
+      } else {
+        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
+      }
+    })
+
+    return filtered
+  }, [leads, searchTerm, statusFilter, heatFilter, channelFilter, qualificationFilter, sortBy, sortOrder])
 
   return (
     <div style={{ padding: 12 }}>
@@ -1128,13 +1328,37 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
             <option value="OTHER">OTHER</option>
           </select>
 
-          {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || channelFilter !== 'ALL') && (
+          <select value={qualificationFilter} onChange={(e) => setQualificationFilter(e.target.value)}>
+            <option value="ALL">All Qualification</option>
+            <option value="HOT">🔥 HOT</option>
+            <option value="WARM">🌡️ WARM</option>
+            <option value="QUALIFIED">✓ QUALIFIED</option>
+            <option value="COLD">❄️ COLD</option>
+          </select>
+
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="createdAt">Sort: Created Date</option>
+            <option value="score">Sort: Score</option>
+            <option value="name">Sort: Name</option>
+            <option value="lastActivity">Sort: Last Activity</option>
+          </select>
+
+          <button
+            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            style={{ padding: '0.5rem', minWidth: '40px' }}
+            title={`Sort ${sortOrder === 'asc' ? 'Ascending' : 'Descending'}`}
+          >
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </button>
+
+          {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || channelFilter !== 'ALL' || qualificationFilter !== 'ALL') && (
             <button
               onClick={() => {
                 setSearchTerm('')
                 setStatusFilter('ALL')
                 setHeatFilter('ALL')
                 setChannelFilter('ALL')
+                setQualificationFilter('ALL')
               }}
               style={{ opacity: 0.7 }}
             >
