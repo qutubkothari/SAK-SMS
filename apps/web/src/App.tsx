@@ -14,6 +14,7 @@ import {
   devSeed,
   exportLeadsCsv,
   getActivityFeed,
+  getAuditLogs,
   getDashboardStats,
   getUnreadNotificationCount,
   getSuccessAnalytics,
@@ -171,6 +172,7 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
               <Link to="/salesmen">Salesmen</Link>
               <Link to="/reports">Reports</Link>
               <Link to="/activity-feed">Activity</Link>
+              {session.user?.role === 'ADMIN' && <Link to="/audit-logs">Audit</Link>}
               <Link to="/success">Success</Link>
               <Link to="/settings">Settings</Link>
               <Link to="/ai">AI</Link>
@@ -3300,6 +3302,209 @@ function ActivityFeedPage({ onError, onInfo }: { onError: (m: string) => void; o
   )
 }
 
+function AuditLogsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
+  const [logs, setLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [limit, setLimit] = useState(100)
+  const [entityType, setEntityType] = useState('')
+  const [entityId, setEntityId] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const params: any = { limit }
+      if (entityType) params.entityType = entityType
+      if (entityId) params.entityId = entityId
+      
+      const data = await getAuditLogs(params)
+      setLogs(data.logs || [])
+      onInfo(`Loaded ${data.logs?.length || 0} audit logs`)
+    } catch (err) {
+      onError('Failed to load audit logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, entityType, entityId])
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleString()
+  }
+
+  const formatChanges = (changes: any) => {
+    if (!changes) return 'N/A'
+    try {
+      const obj = typeof changes === 'string' ? JSON.parse(changes) : changes
+      return Object.entries(obj).map(([key, val]) => `${key}: ${JSON.stringify(val)}`).join(', ')
+    } catch {
+      return JSON.stringify(changes)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Audit Logs</h1>
+        <button
+          onClick={load}
+          disabled={loading}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1
+          }}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
+
+      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <select
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
+          style={{
+            padding: '0.5rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem'
+          }}
+        >
+          <option value={50}>Last 50</option>
+          <option value={100}>Last 100</option>
+          <option value={250}>Last 250</option>
+          <option value={500}>Last 500</option>
+        </select>
+
+        <input
+          type="text"
+          value={entityType}
+          onChange={(e) => setEntityType(e.target.value)}
+          placeholder="Filter by entity type (Lead, Note, etc.)"
+          style={{
+            padding: '0.5rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            minWidth: '250px'
+          }}
+        />
+
+        <input
+          type="text"
+          value={entityId}
+          onChange={(e) => setEntityId(e.target.value)}
+          placeholder="Filter by entity ID"
+          style={{
+            padding: '0.5rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            minWidth: '200px'
+          }}
+        />
+
+        {(entityType || entityId) && (
+          <button
+            onClick={() => {
+              setEntityType('')
+              setEntityId('')
+            }}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+
+      {loading && logs.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+          Loading audit logs...
+        </div>
+      ) : logs.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+          No audit logs found
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '0.875rem', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #e5e7eb' }}>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Time</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>User</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Action</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Entity</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Entity ID</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Changes</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left' }}>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log, idx) => (
+                <tr
+                  key={idx}
+                  style={{
+                    borderBottom: '1px solid #e5e7eb',
+                    backgroundColor: idx % 2 === 0 ? 'white' : '#f9fafb'
+                  }}
+                >
+                  <td style={{ padding: '0.75rem', whiteSpace: 'nowrap' }}>
+                    {formatDate(log.createdAt)}
+                  </td>
+                  <td style={{ padding: '0.75rem' }}>
+                    {log.userId?.slice(0, 8) || 'System'}
+                  </td>
+                  <td style={{ padding: '0.75rem' }}>
+                    <span
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        backgroundColor: '#dbeafe',
+                        color: '#1e40af',
+                        borderRadius: '0.25rem',
+                        fontSize: '0.75rem',
+                        fontWeight: '600'
+                      }}
+                    >
+                      {log.action}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem' }}>{log.entityType}</td>
+                  <td style={{ padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                    {log.entityId?.slice(0, 12)}
+                  </td>
+                  <td style={{ padding: '0.75rem', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {formatChanges(log.changes)}
+                  </td>
+                  <td style={{ padding: '0.75rem', fontSize: '0.75rem', opacity: 0.7 }}>
+                    {log.ipAddress || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const { toast, setToast } = useToast()
   const onError = (m: string) => setToast({ kind: 'error', message: m })
@@ -3411,6 +3616,14 @@ function App() {
             element={
               <RequireAuth session={session}>
                 <ActivityFeedPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/audit-logs"
+            element={
+              <RequireAuth session={session}>
+                <AuditLogsPage onError={onError} onInfo={onInfo} />
               </RequireAuth>
             }
           />
