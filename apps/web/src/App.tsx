@@ -5,6 +5,8 @@ import {
   authMode,
   assignLead,
   assignTriageItem,
+  bulkAssignLeads,
+  bulkUpdateLeadStatus,
   closeTriageItem,
   createBot,
   createSuccessDefinition,
@@ -744,6 +746,11 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
   const [channelFilter, setChannelFilter] = useState<string>('ALL')
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
+  const [salesmen, setSalesmen] = useState<any[]>([])
+  const [bulkAction, setBulkAction] = useState<'assign' | 'status' | null>(null)
+  const [bulkSalesmanId, setBulkSalesmanId] = useState<string>('')
+  const [bulkStatus, setBulkStatus] = useState<string>('CONTACTED')
 
   async function refresh() {
     try {
@@ -756,8 +763,60 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
 
   useEffect(() => {
     refresh()
+    ;(async () => {
+      try {
+        const sm = await listSalesmen()
+        setSalesmen(sm.salesmen)
+      } catch {
+        // ignore
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const toggleSelection = (leadId: string) => {
+    const newSet = new Set(selectedLeadIds)
+    if (newSet.has(leadId)) {
+      newSet.delete(leadId)
+    } else {
+      newSet.add(leadId)
+    }
+    setSelectedLeadIds(newSet)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedLeadIds.size === filteredLeads.length) {
+      setSelectedLeadIds(new Set())
+    } else {
+      setSelectedLeadIds(new Set(filteredLeads.map((l) => l.id)))
+    }
+  }
+
+  const handleBulkAssign = async () => {
+    if (selectedLeadIds.size === 0) return
+    try {
+      const result = await bulkAssignLeads(Array.from(selectedLeadIds), bulkSalesmanId || null)
+      onError(`Assigned ${result.count} leads`)
+      setSelectedLeadIds(new Set())
+      setBulkAction(null)
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const handleBulkStatus = async () => {
+    if (selectedLeadIds.size === 0) return
+    try {
+      const result = await bulkUpdateLeadStatus(Array.from(selectedLeadIds), bulkStatus)
+      onError(`Updated ${result.count} leads`)
+      setSelectedLeadIds(new Set())
+      setBulkAction(null)
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
 
   const filteredLeads = useMemo(() => {
     return leads.filter((l) => {
@@ -789,6 +848,13 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>{t('leads')}</h2>
           <button onClick={refresh}>{t('refresh')}</button>
+          {selectedLeadIds.size > 0 && (
+            <>
+              <button onClick={() => setBulkAction('assign')}>Bulk Assign ({selectedLeadIds.size})</button>
+              <button onClick={() => setBulkAction('status')}>Bulk Status ({selectedLeadIds.size})</button>
+              <button onClick={() => setSelectedLeadIds(new Set())} style={{ opacity: 0.7 }}>Clear</button>
+            </>
+          )}
           <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
             {filteredLeads.length} / {leads.length}
           </span>
@@ -847,11 +913,53 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
             </button>
           )}
         </div>
+
+        {bulkAction === 'assign' && (
+          <div style={{ marginTop: 12, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span>Assign {selectedLeadIds.size} leads to:</span>
+              <select value={bulkSalesmanId} onChange={(e) => setBulkSalesmanId(e.target.value)}>
+                <option value="">{t('unassigned')}</option>
+                {salesmen.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+              <button onClick={handleBulkAssign}>Apply</button>
+              <button onClick={() => setBulkAction(null)} style={{ opacity: 0.7 }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {bulkAction === 'status' && (
+          <div style={{ marginTop: 12, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span>Update {selectedLeadIds.size} leads to:</span>
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+                {['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <button onClick={handleBulkStatus}>Apply</button>
+              <button onClick={() => setBulkAction(null)} style={{ opacity: 0.7 }}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <table style={{ marginTop: 12 }}>
         <thead>
           <tr>
+            <th align="left">
+              <input
+                type="checkbox"
+                checked={selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0}
+                onChange={toggleSelectAll}
+              />
+            </th>
             <th align="left">{t('lead')}</th>
             <th align="left">{t('channel')}</th>
             <th align="left">{t('status')}</th>
@@ -862,6 +970,13 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
         <tbody>
           {filteredLeads.map((l) => (
             <tr key={l.id}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={selectedLeadIds.has(l.id)}
+                  onChange={() => toggleSelection(l.id)}
+                />
+              </td>
               <td>
                 <Link to={`/leads/${l.id}`}>{l.fullName ?? l.phone ?? l.id}</Link>
               </td>

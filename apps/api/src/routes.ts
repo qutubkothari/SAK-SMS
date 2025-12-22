@@ -1025,6 +1025,86 @@ routes.post(
   })
 );
 
+// Bulk operations
+routes.post(
+  '/leads/bulk/assign',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const body = z.object({ 
+      leadIds: z.array(z.string()).min(1), 
+      salesmanId: z.string().nullable() 
+    }).parse(req.body);
+
+    if (body.salesmanId) {
+      const salesman = await prisma.salesman.findFirst({ where: { id: body.salesmanId, tenantId } });
+      if (!salesman) throw new Error('Salesman not found');
+
+      for (const leadId of body.leadIds) {
+        await createNotificationForUser({
+          tenantId,
+          userId: salesman.userId,
+          type: 'LEAD_ASSIGNED',
+          title: 'New lead assigned',
+          body: `Lead ${leadId} assigned to you`,
+          entityType: 'Lead',
+          entityId: leadId
+        });
+      }
+    }
+
+    const updated = await prisma.lead.updateMany({
+      where: { id: { in: body.leadIds }, tenantId },
+      data: { assignedToSalesmanId: body.salesmanId }
+    });
+
+    for (const leadId of body.leadIds) {
+      await prisma.leadEvent.create({
+        data: {
+          tenantId,
+          leadId,
+          type: 'BULK_ASSIGNED',
+          payload: { assignedToSalesmanId: body.salesmanId, byRole: role, count: body.leadIds.length }
+        }
+      });
+    }
+
+    res.json({ ok: true, count: updated.count });
+  })
+);
+
+routes.post(
+  '/leads/bulk/status',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const body = z.object({ 
+      leadIds: z.array(z.string()).min(1), 
+      status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'])
+    }).parse(req.body);
+
+    const updated = await prisma.lead.updateMany({
+      where: { id: { in: body.leadIds }, tenantId },
+      data: { status: body.status }
+    });
+
+    for (const leadId of body.leadIds) {
+      await prisma.leadEvent.create({
+        data: {
+          tenantId,
+          leadId,
+          type: 'BULK_STATUS_UPDATE',
+          payload: { status: body.status, byRole: role, count: body.leadIds.length }
+        }
+      });
+    }
+
+    res.json({ ok: true, count: updated.count });
+  })
+);
+
 // Manager manual assignment
 routes.post(
   '/leads/:id/assign',

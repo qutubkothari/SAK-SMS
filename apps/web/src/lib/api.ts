@@ -228,6 +228,20 @@ export async function assignLead(id: string, salesmanId: string | null) {
   })
 }
 
+export async function bulkAssignLeads(leadIds: string[], salesmanId: string | null) {
+  return request<{ ok: true; count: number }>('/leads/bulk/assign', {
+    method: 'POST',
+    body: JSON.stringify({ leadIds, salesmanId })
+  })
+}
+
+export async function bulkUpdateLeadStatus(leadIds: string[], status: string) {
+  return request<{ ok: true; count: number }>('/leads/bulk/status', {
+    method: 'POST',
+    body: JSON.stringify({ leadIds, status })
+  })
+}
+
 export async function listTriage(status: TriageStatusFilter = 'OPEN') {
   const q = status ? `?status=${encodeURIComponent(status)}` : ''
   return request<{ items: TriageItem[] }>(`/triage${q}`)
