@@ -18,6 +18,7 @@ import {
   getSuccessAnalytics,
   getAiConfig,
   getLead,
+  importLeadsCsv,
   ingestMessage,
   listNotifications,
   loadTenantId,
@@ -989,6 +990,28 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
             }}
           >
             Export CSV
+          </button>
+          <button
+            onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'
+              input.accept = '.csv'
+              input.onchange = async (e: any) => {
+                const file = e.target?.files?.[0]
+                if (!file) return
+                try {
+                  const text = await file.text()
+                  const result = await importLeadsCsv(text)
+                  onError(`Imported: ${result.created} created, ${result.skipped} skipped`)
+                  refresh()
+                } catch (err) {
+                  onError(err instanceof Error ? err.message : 'Import failed')
+                }
+              }
+              input.click()
+            }}
+          >
+            Import CSV
           </button>
           {selectedLeadIds.size > 0 && (
             <>

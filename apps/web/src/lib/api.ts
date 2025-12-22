@@ -230,6 +230,13 @@ export async function exportLeadsCsv() {
   window.URL.revokeObjectURL(downloadUrl)
 }
 
+export async function importLeadsCsv(csvData: string) {
+  return request<{ ok: boolean; created: number; skipped: number; errors: string[] }>('/leads/import/csv', {
+    method: 'POST',
+    body: JSON.stringify({ csvData })
+  })
+}
+
 export async function getLead(id: string) {
   return request<{ lead: any }>(`/leads/${id}`)
 }

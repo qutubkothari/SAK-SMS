@@ -857,6 +857,92 @@ routes.get(
   })
 );
 
+routes.post(
+  '/leads/import/csv',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const { csvData } = z.object({ csvData: z.string() }).parse(req.body);
+
+    // Parse CSV (simple parser for headers + rows)
+    const lines = csvData.split('\n').filter((line) => line.trim());
+    if (lines.length < 2) throw new Error('CSV must have headers and at least one data row');
+
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+    const rows = lines.slice(1).map((line) => {
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+      return values;
+    });
+
+    const fullNameIdx = headers.findIndex((h) => h.toLowerCase().includes('name'));
+    const phoneIdx = headers.findIndex((h) => h.toLowerCase().includes('phone'));
+    const emailIdx = headers.findIndex((h) => h.toLowerCase().includes('email'));
+    const channelIdx = headers.findIndex((h) => h.toLowerCase().includes('channel'));
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+      try {
+        const fullName = fullNameIdx >= 0 ? row[fullNameIdx]?.replace(/^"|"$/g, '') : null;
+        const phone = phoneIdx >= 0 ? row[phoneIdx]?.replace(/^"|"$/g, '') : null;
+        const email = emailIdx >= 0 ? row[emailIdx]?.replace(/^"|"$/g, '') : null;
+        let channel = channelIdx >= 0 ? row[channelIdx]?.replace(/^"|"$/g, '').toUpperCase() : 'OTHER';
+
+        if (!fullName && !phone && !email) {
+          skipped++;
+          continue;
+        }
+
+        // Validate channel
+        const validChannels = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'EMAIL', 'PHONE', 'OTHER'];
+        if (!validChannels.includes(channel)) channel = 'OTHER';
+
+        await prisma.lead.create({
+          data: {
+            tenantId,
+            channel: channel as any,
+            fullName,
+            phone,
+            email,
+            language: 'EN',
+            heat: 'WARM',
+            status: 'NEW'
+          }
+        });
+        created++;
+      } catch (e) {
+        errors.push(`Row error: ${e instanceof Error ? e.message : 'Unknown'}`);
+        skipped++;
+      }
+    }
+
+    res.json({ ok: true, created, skipped, errors: errors.slice(0, 10) });
+  })
+);
+
 routes.get(
   '/leads/:id',
   asyncHandler(async (req, res) => {
