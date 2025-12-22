@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [Parameter()] [string] $Server = '13.200.36.74',
   [Parameter()] [string] $User = 'ubuntu',
@@ -80,9 +80,9 @@ function Invoke-AutoDeploy {
       $commitMsg = "Auto-deploy: changes at $timestamp"
       git commit -m $commitMsg
       git push origin $currentBranch
-      Write-Host "  ✓ Pushed to origin/$currentBranch" -ForegroundColor Green
+      Write-Host "  âœ“ Pushed to origin/$currentBranch" -ForegroundColor Green
     } else {
-      Write-Host "  ✓ No changes to commit" -ForegroundColor Green
+      Write-Host "  âœ“ No changes to commit" -ForegroundColor Green
     }
     
     # Step 2: Deploy to EC2
@@ -113,12 +113,12 @@ function Invoke-AutoDeploy {
     
     & ssh @sshArgs $target $remoteCmd | Out-Host
     
-    Write-Host "  ✓ EC2 deploy complete" -ForegroundColor Green
+    Write-Host "  âœ“ EC2 deploy complete" -ForegroundColor Green
     Write-Host "  Web:  http://$Server/" -ForegroundColor Cyan
     Write-Host "  API:  http://$Server/api/health" -ForegroundColor Cyan
     
   } catch {
-    Write-Host "  ✗ Deploy failed: $_" -ForegroundColor Red
+    Write-Host "  âœ— Deploy failed: $_" -ForegroundColor Red
   } finally {
     Pop-Location
   }
@@ -174,3 +174,4 @@ try {
   }
   Write-Host "Auto-deploy watcher stopped." -ForegroundColor Yellow
 }
+
