@@ -3,34 +3,48 @@
 
 :root {
   color-scheme: light;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
-  line-height: 1.5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
 
-  --bg: #f7faf9;
+  --bg: #fafbfc;
+  --bg-gradient-start: #f0f9ff;
+  --bg-gradient-end: #f8fafc;
   --surface: #ffffff;
-  --surface-2: #fbfdfc;
-  --text: #0f172a;
+  --surface-hover: #f8fafc;
+  --surface-2: #f1f5f9;
+  --text: #1e293b;
+  --text-secondary: #475569;
   --muted: #64748b;
-  --border: rgba(15, 23, 42, 0.12);
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
 
-  --mint-50: #ecfdf5;
-  --mint-100: #d1fae5;
-  --mint-200: #a7f3d0;
-  --mint-500: #10b981;
-  --mint-600: #059669;
-  --mint-700: #047857;
+  --primary: #3b82f6;
+  --primary-light: #60a5fa;
+  --primary-dark: #2563eb;
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
 
-  --sun-50: #fffbeb;
-  --sun-100: #fef3c7;
-  --sun-500: #f59e0b;
+  --success: #10b981;
+  --success-light: #34d399;
+  --success-50: #ecfdf5;
 
-  --danger-50: #fff1f2;
-  --danger-500: #ef4444;
+  --warning: #f59e0b;
+  --warning-light: #fbbf24;
+  --warning-50: #fffbeb;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --danger: #ef4444;
+  --danger-light: #f87171;
+  --danger-50: #fef2f2;
+
+  --purple: #8b5cf6;
+  --purple-50: #f5f3ff;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 10px 10px -5px rgba(15, 23, 42, 0.04);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -46,38 +60,56 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(900px 420px at 18% 10%, var(--mint-100), transparent 60%),
-    radial-gradient(700px 340px at 85% 0%, var(--sun-100), transparent 55%), var(--bg);
+  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
   color: var(--text);
 }
 
 a {
-  color: var(--mint-700);
+  color: var(--primary);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
+  transition: color 150ms ease;
 }
 
 a:hover {
-  text-decoration: underline;
+  color: var(--primary-dark);
 }
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight:var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.sak-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-light
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
 
 /* App primitives used by App.tsx */
 .sak-card {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-.sak-topbar {
+  box-shado100;
+  backdrop-filter: saturate(180%) blur(20px);
+  background: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm
   position: sticky;
   top: 0;
-  z-index: 5;
-  backdrop-filter: saturate(180%) blur(10px);
-  background: rgba(255, 255, 255, 0.75);
-  border-bottom: 1px solid var(--border);
-}
-
+  z-index: 5;400px;
+  margin: 0 auto;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20
 .sak-topbar__inner {
   max-width: 1100px;
   margin: 0 auto;
@@ -122,42 +154,46 @@ a:hover {
   font-weight: 700;
 }
 
-.sak-topbar a {
-  padding: 8px 10px;
-  border-radius: 10px;
+.sak-topbar a {4px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 150ms ease;
 }
 
 .sak-topbar a:hover {
-  background: rgba(16, 185, 129, 0.08);
+  background: var(--primary-50);
+  color: var(--primary-dark)185, 129, 0.08);
   text-decoration: none;
 }
 
-.sak-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.9);
+.sak-ba6px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--surface-2);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .sak-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  background: rgba(100, 116, 139, 0.7);
+  background: var(--muted);
 }
 
 .sak-dot--mint {
-  background: var(--mint-600);
+  background: var(--success);
 }
 
 .sak-dot--sun {
-  background: var(--sun-500);
+  background: var(--warning);
 }
+
+.sak-dot--danger {
+  background: var(--danger
 
 .sak-dot--danger {
   background: var(--danger-500);
@@ -165,42 +201,127 @@ a:hover {
 
 /* Form controls */
 input,
-select,
-textarea {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
+select,.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
   outline: none;
-  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-  transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+  font-size: 14px;
+  box-shadow: var(--shadow-xs);
+  transition: all 150ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
 }
 
 textarea {
   resize: vertical;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: rgba(16, 185, 129, 0.65);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
-}
-
-/* Buttons */
-button {
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.08));
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(var(--border);
+  background: var(--surface);
   color: var(--text);
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 800;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 500;
+  font-size: 14px;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 120ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  box-shadow: var(--shadow-xs);
+  transition: all 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
+button:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0px);
+  box-shadow: var(--shadow-xs);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+th,
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+}
+
+th {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+}
+
+td {
+  font-size: 14px;
+  color: var(--text);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* Page container */
+.page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Link active state */
+.link-active {
+  background: var(--primary-50) !important;
+  color: var(--primary-dark) !important;
+  font-weight: 600;
+}
+
+/* Status badges with colors */
+.badge-new { background: var(--primary-50); color: var(--primary); }
+.badge-success { background: var(--success-50); color: var(--success); }
+.badge-warning { background: var(--warning-50); color: var(--warning); }
+.badge-danger { background: var(--danger-50); color: var(--danger); }
+.badge-purple { background: var(--purple-50); color: var(--purple); }
+tbody tr {
+  transition: background 150ms ease;
+}
+
+tbody tr:hover {
+  background: var(--primary-50
+  color: var(--danger);
+  border-color: var(--danger-light);
+}
+
+button.danger:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger)
 button:hover {
   border-color: rgba(16, 185, 129, 0.5);
   box-shadow: var(--shadow-md);
