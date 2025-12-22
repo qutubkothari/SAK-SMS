@@ -331,13 +331,14 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
       }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <h1 style={{ 
-            fontSize: '28px', 
+            fontSize: '32px', 
             fontWeight: 700, 
             marginBottom: 8,
-            background: 'linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%)',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
+            color: 'transparent',
+            display: 'inline-block'
           }}>
             SAK CRM
           </h1>
