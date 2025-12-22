@@ -163,6 +163,7 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
               <Link to="/triage">{t('triage')}</Link>
               <Link to="/salesmen">Salesmen</Link>
               <Link to="/success">Success</Link>
+              <Link to="/settings">Settings</Link>
               <Link to="/ai">AI</Link>
               <Link to="/bots">Bots</Link>
               <Link to="/ingest">Ingest</Link>
@@ -2263,6 +2264,146 @@ function SuccessPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
   )
 }
 
+function SettingsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
+  const [config, setConfig] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  async function refresh() {
+    try {
+      const { getAssignmentConfig } = await import('./lib/api')
+      const data = await getAssignmentConfig()
+      setConfig(data.config)
+      setLoading(false)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to load settings')
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleSave() {
+    try {
+      const { updateAssignmentConfig } = await import('./lib/api')
+      await updateAssignmentConfig({
+        strategy: config.strategy,
+        autoAssign: config.autoAssign,
+        considerCapacity: config.considerCapacity,
+        considerScore: config.considerScore,
+        considerSkills: config.considerSkills
+      })
+      onInfo('Settings saved successfully')
+      await refresh()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to save settings')
+    }
+  }
+
+  if (loading) return <div style={{ padding: 12 }}>Loading settings...</div>
+  if (!config) return <div style={{ padding: 12 }}>No configuration found</div>
+
+  return (
+    <div style={{ padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>Assignment Settings</h2>
+        <button onClick={handleSave} className="button button--primary">
+          Save Changes
+        </button>
+      </div>
+
+      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Lead Assignment Strategy</h3>
+        
+        <label style={{ display: 'block', marginBottom: 16 }}>
+          <span style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Assignment Strategy</span>
+          <select
+            value={config.strategy}
+            onChange={(e) => setConfig({ ...config, strategy: e.target.value })}
+            style={{ width: '100%', maxWidth: 400 }}
+          >
+            <option value="ROUND_ROBIN">Round Robin (Balanced Distribution)</option>
+            <option value="LEAST_ACTIVE">Least Active (Lowest Workload First)</option>
+            <option value="SKILLS_BASED">Skills Based (Coming Soon)</option>
+            <option value="GEOGRAPHIC">Geographic (Coming Soon)</option>
+            <option value="CUSTOM">Custom Rules (Coming Soon)</option>
+          </select>
+          <small style={{ display: 'block', marginTop: 4, opacity: 0.7 }}>
+            Choose how leads are automatically assigned to salesmen
+          </small>
+        </label>
+
+        <label style={{ display: 'block', marginBottom: 16 }}>
+          <input
+            type="checkbox"
+            checked={config.autoAssign}
+            onChange={(e) => setConfig({ ...config, autoAssign: e.target.checked })}
+            style={{ marginRight: 8 }}
+          />
+          <span style={{ fontWeight: 600 }}>Enable Auto-Assignment</span>
+          <small style={{ display: 'block', marginLeft: 24, marginTop: 4, opacity: 0.7 }}>
+            Automatically assign new leads based on the selected strategy
+          </small>
+        </label>
+
+        <h3>Strategy Options</h3>
+
+        <label style={{ display: 'block', marginBottom: 16 }}>
+          <input
+            type="checkbox"
+            checked={config.considerCapacity}
+            onChange={(e) => setConfig({ ...config, considerCapacity: e.target.checked })}
+            style={{ marginRight: 8 }}
+          />
+          <span style={{ fontWeight: 600 }}>Consider Salesman Capacity</span>
+          <small style={{ display: 'block', marginLeft: 24, marginTop: 4, opacity: 0.7 }}>
+            Do not assign to salesmen who have reached their capacity limit
+          </small>
+        </label>
+
+        <label style={{ display: 'block', marginBottom: 16 }}>
+          <input
+            type="checkbox"
+            checked={config.considerScore}
+            onChange={(e) => setConfig({ ...config, considerScore: e.target.checked })}
+            style={{ marginRight: 8 }}
+          />
+          <span style={{ fontWeight: 600 }}>Consider Salesman Score</span>
+          <small style={{ display: 'block', marginLeft: 24, marginTop: 4, opacity: 0.7 }}>
+            Prioritize salesmen with higher performance scores
+          </small>
+        </label>
+
+        <label style={{ display: 'block', marginBottom: 16 }}>
+          <input
+            type="checkbox"
+            checked={config.considerSkills}
+            onChange={(e) => setConfig({ ...config, considerSkills: e.target.checked })}
+            style={{ marginRight: 8 }}
+            disabled
+          />
+          <span style={{ fontWeight: 600, opacity: 0.5 }}>Consider Skills Matching (Coming Soon)</span>
+          <small style={{ display: 'block', marginLeft: 24, marginTop: 4, opacity: 0.7 }}>
+            Match leads with salesmen based on product/service expertise
+          </small>
+        </label>
+      </div>
+
+      <div className="sak-card" style={{ padding: 16 }}>
+        <h3 style={{ marginTop: 0 }}>How It Works</h3>
+        <ul style={{ paddingLeft: 20, lineHeight: 1.6 }}>
+          <li><strong>Round Robin:</strong> Distributes leads evenly among all active salesmen, considering capacity and optionally scores</li>
+          <li><strong>Least Active:</strong> Always assigns to the salesman with the fewest active leads</li>
+          <li><strong>Skills Based:</strong> (Coming Soon) Match leads to salesmen based on product categories or expertise</li>
+          <li><strong>Geographic:</strong> (Coming Soon) Assign based on lead location and salesman territories</li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const { toast, setToast } = useToast()
   const onError = (m: string) => setToast({ kind: 'error', message: m })
@@ -2366,6 +2507,14 @@ function App() {
             element={
               <RequireAuth session={session}>
                 <SuccessPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth session={session}>
+                <SettingsPage onError={onError} onInfo={onInfo} />
               </RequireAuth>
             }
           />

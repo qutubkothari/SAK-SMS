@@ -336,6 +336,17 @@ export async function sendLeadMessage(leadId: string, channel: string, content: 
   })
 }
 
+export async function getAssignmentConfig() {
+  return request<{ config: { id: string; strategy: string; autoAssign: boolean; considerCapacity: boolean; considerScore: boolean; considerSkills: boolean; customRules: any } }>('/assignment-config')
+}
+
+export async function updateAssignmentConfig(payload: { strategy?: string; autoAssign?: boolean; considerCapacity?: boolean; considerScore?: boolean; considerSkills?: boolean; customRules?: any }) {
+  return request<{ ok: true; config: any }>('/assignment-config', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function devBootstrap(payload: {
   tenantName: string
   email: string

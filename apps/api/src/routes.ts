@@ -1550,6 +1550,77 @@ routes.post(
   })
 );
 
+// Assignment Configuration
+routes.get(
+  '/assignment-config',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    let config = await prisma.assignmentConfig.findUnique({
+      where: { tenantId }
+    });
+
+    // Create default config if not exists
+    if (!config) {
+      config = await prisma.assignmentConfig.create({
+        data: {
+          tenantId,
+          strategy: 'ROUND_ROBIN',
+          autoAssign: true,
+          considerCapacity: true,
+          considerScore: false,
+          considerSkills: false
+        }
+      });
+    }
+
+    res.json({ config });
+  })
+);
+
+routes.patch(
+  '/assignment-config',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const body = z.object({
+      strategy: z.enum(['ROUND_ROBIN', 'LEAST_ACTIVE', 'SKILLS_BASED', 'GEOGRAPHIC', 'CUSTOM']).optional(),
+      autoAssign: z.boolean().optional(),
+      considerCapacity: z.boolean().optional(),
+      considerScore: z.boolean().optional(),
+      considerSkills: z.boolean().optional(),
+      customRules: z.any().optional()
+    }).parse(req.body);
+
+    let config = await prisma.assignmentConfig.findUnique({
+      where: { tenantId }
+    });
+
+    if (!config) {
+      config = await prisma.assignmentConfig.create({
+        data: {
+          tenantId,
+          strategy: body.strategy ?? 'ROUND_ROBIN',
+          autoAssign: body.autoAssign ?? true,
+          considerCapacity: body.considerCapacity ?? true,
+          considerScore: body.considerScore ?? false,
+          considerSkills: body.considerSkills ?? false,
+          customRules: body.customRules ?? null
+        }
+      });
+    } else {
+      config = await prisma.assignmentConfig.update({
+        where: { tenantId },
+        data: body
+      });
+    }
+
+    res.json({ ok: true, config });
+  })
+);
+
 // AI stubs (MOCK) – will be used by WhatsApp ingestion pipeline later.
 routes.post(
   '/ai/triage',

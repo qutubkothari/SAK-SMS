@@ -55,6 +55,14 @@ enum AiProvider {
   GEMINI
 }
 
+enum AssignmentStrategy {
+  ROUND_ROBIN
+  LEAST_ACTIVE
+  SKILLS_BASED
+  GEOGRAPHIC
+  CUSTOM
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String
@@ -72,6 +80,7 @@ model Tenant {
   notifications Notification[]
 
   aiConfig  TenantAiConfig?
+  assignmentConfig AssignmentConfig?
 }
 
 model TenantAiConfig {
@@ -312,4 +321,21 @@ model MessageTemplate {
 
   @@index([tenantId])
   @@index([tenantId, isActive])
+}
+
+model AssignmentConfig {
+  id              String             @id @default(cuid())
+  tenantId        String             @unique
+  strategy        AssignmentStrategy @default(ROUND_ROBIN)
+  autoAssign      Boolean            @default(true)
+  considerCapacity Boolean           @default(true)
+  considerScore   Boolean            @default(false)
+  considerSkills  Boolean            @default(false)
+  customRules     Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
