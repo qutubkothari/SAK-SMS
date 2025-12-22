@@ -202,6 +202,34 @@ export async function listLeads() {
   return request<{ leads: Lead[] }>('/leads')
 }
 
+export async function exportLeadsCsv() {
+  const url = `${baseUrl()}/leads/export/csv`
+  const headers = new Headers()
+  
+  if (authMode() === 'dev_headers') {
+    const auth = loadDevAuth()
+    if (auth.tenantId) headers.set('x-tenant-id', auth.tenantId)
+    if (auth.userId) headers.set('x-user-id', auth.userId)
+    if (auth.role) headers.set('x-role', auth.role)
+  } else {
+    const tenantId = loadTenantId()
+    if (tenantId) headers.set('x-tenant-id', tenantId)
+  }
+
+  const response = await fetch(url, { headers, credentials: 'include' })
+  if (!response.ok) throw new Error('Export failed')
+  
+  const blob = await response.blob()
+  const downloadUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = downloadUrl
+  a.download = `leads-${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(downloadUrl)
+}
+
 export async function getLead(id: string) {
   return request<{ lead: any }>(`/leads/${id}`)
 }

@@ -750,6 +750,56 @@ routes.get(
 );
 
 routes.get(
+  '/leads/export/csv',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+
+    const salesman =
+      role === 'SALESMAN'
+        ? await prisma.salesman.findFirst({ where: { tenantId, userId } })
+        : null;
+
+    if (role === 'SALESMAN' && !salesman) throw new Error('Salesman profile not found');
+
+    const where = {
+      tenantId,
+      ...(role === 'SALESMAN' && salesman ? { assignedToSalesmanId: salesman.id } : {})
+    } as const;
+
+    const leads = await prisma.lead.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 1000
+    });
+
+    // Build CSV
+    const headers = ['ID', 'Full Name', 'Phone', 'Email', 'Channel', 'Status', 'Heat', 'Language', 'Assigned To', 'Created At', 'Updated At'];
+    const rows = leads.map((l) => [
+      l.id,
+      l.fullName ?? '',
+      l.phone ?? '',
+      l.email ?? '',
+      l.channel,
+      l.status,
+      l.heat,
+      l.language,
+      l.assignedToSalesmanId ?? '',
+      l.createdAt.toISOString(),
+      l.updatedAt.toISOString()
+    ]);
+
+    const csvLines = [headers, ...rows].map((row) =>
+      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    );
+    const csv = csvLines.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="leads-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  })
+);
+
+routes.get(
   '/leads/:id',
   asyncHandler(async (req, res) => {
     const { tenantId, role, userId } = getAuthContext(req);

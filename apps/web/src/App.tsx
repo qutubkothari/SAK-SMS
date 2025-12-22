@@ -12,6 +12,7 @@ import {
   createSuccessDefinition,
   devBootstrap,
   devSeed,
+  exportLeadsCsv,
   getUnreadNotificationCount,
   getSuccessAnalytics,
   getAiConfig,
@@ -848,6 +849,18 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>{t('leads')}</h2>
           <button onClick={refresh}>{t('refresh')}</button>
+          <button
+            onClick={async () => {
+              try {
+                await exportLeadsCsv()
+                onError('Export started')
+              } catch (err) {
+                onError(err instanceof Error ? err.message : 'Export failed')
+              }
+            }}
+          >
+            Export CSV
+          </button>
           {selectedLeadIds.size > 0 && (
             <>
               <button onClick={() => setBulkAction('assign')}>Bulk Assign ({selectedLeadIds.size})</button>
