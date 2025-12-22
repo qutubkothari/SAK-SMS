@@ -1,0 +1,316 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Dev: API",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:api"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Dev: Web",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:web"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "DB: Up",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"db:up"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker and winget",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"docker --version; winget --version"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Install: Docker Desktop (winget)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"winget install -e --id Docker.DockerDesktop --accept-package-agreements --accept-source-agreements"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait: Docker Desktop install status",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Start-Sleep -Seconds 8; \"---\"; Get-Command docker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue; docker --version"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Ready",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"docker --version; docker compose version"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Path + Desktop",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$paths=@(\"C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\",\"C:\\\\Program Files\\\\Docker\\\\Docker\"); $paths | ForEach-Object { if (Test-Path $_) { \"FOUND: $_\" } }; Get-Command \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue; Get-Command docker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue; where.exe docker 2>$null"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Files Exist",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Test-Path \"C:\\\\Program Files\\\\Docker\\\\Docker\"; Get-ChildItem \"C:\\\\Program Files\\\\Docker\\\\Docker\" -ErrorAction SilentlyContinue | Select-Object -First 30 | Format-Table Name"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker EXE Path",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$p1 = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; $p2 = Join-Path $env:ProgramFiles 'Docker\\Docker\\docker.exe'; Write-Host \"p1=$p1\"; Write-Host \"p2=$p2\"; Write-Host \"exists1=$(Test-Path $p1)\"; Write-Host \"exists2=$(Test-Path $p2)\"; if (Test-Path $p1) { & $p1 --version }; if (Test-Path $p1) { & $p1 compose version }"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "DB: Up (Docker Compose)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"docker compose up -d"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "DB: Up (Explicit Docker Path)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; & $docker compose up -d"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Start Docker Desktop + Wait",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$desktop = Join-Path $env:ProgramFiles 'Docker\\Docker\\Docker Desktop.exe'; $docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; if (Test-Path $desktop) { Start-Process $desktop }; $deadline = (Get-Date).AddMinutes(3); while ((Get-Date) -lt $deadline) { try { & $docker version | Out-String | Write-Host; Write-Host 'Docker is ready'; exit 0 } catch { Start-Sleep -Seconds 5; Write-Host 'Waiting for Docker engine...' } }; Write-Host 'Docker did not become ready in time'; exit 1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "DB: Up (Now)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; & $docker compose up -d"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Engine Access",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; & $docker info; Write-Host \"exit=$LASTEXITCODE\"; \"---\"; & $docker version; Write-Host \"exit=$LASTEXITCODE\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Info ExitCode",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker=\"$env:ProgramFiles\\Docker\\Docker\\resources\\bin\\docker.exe\"; & $docker info; Write-Host exit=$LASTEXITCODE; & $docker version; Write-Host exit=$LASTEXITCODE"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Engine Connectivity",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker=$env:ProgramFiles + '\\Docker\\Docker\\resources\\bin\\docker.exe'; & $docker info; Write-Host exit=$LASTEXITCODE; & $docker version; Write-Host exit=$LASTEXITCODE"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Docker Engine Connectivity 2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker=$env:ProgramFiles + \"\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe\"; & $docker info; Write-Host exit=$LASTEXITCODE; & $docker version; Write-Host exit=$LASTEXITCODE"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait: Docker Server Ready",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$desktop = Join-Path $env:ProgramFiles 'Docker\\Docker\\Docker Desktop.exe'; $docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; if (Test-Path $desktop) { Start-Process $desktop }; $deadline = (Get-Date).AddMinutes(5); while ((Get-Date) -lt $deadline) { & $docker info; if ($LASTEXITCODE -eq 0) { Write-Host 'READY'; exit 0 } else { Write-Host 'Waiting for Docker server...'; Start-Sleep -Seconds 5 } }; Write-Host 'TIMEOUT'; exit 1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait: Docker Server Ready (poll)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; $deadline = (Get-Date).AddMinutes(5); while ((Get-Date) -lt $deadline) { & $docker info | Out-String | Select-Object -First 1 | Write-Host; if ($LASTEXITCODE -eq 0) { Write-Host 'READY'; exit 0 } else { Write-Host 'not-ready'; Start-Sleep -Seconds 5 } }; exit 1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait: Docker Engine Ready (10m)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$desktop = Join-Path $env:ProgramFiles 'Docker\\Docker\\Docker Desktop.exe'; $docker = Join-Path $env:ProgramFiles 'Docker\\Docker\\resources\\bin\\docker.exe'; if (Test-Path $desktop) { Start-Process $desktop | Out-Null }; $deadline = (Get-Date).AddMinutes(10); while ((Get-Date) -lt $deadline) { $ts=(Get-Date).ToString('HH:mm:ss'); & $docker info > $null 2>&1; if ($LASTEXITCODE -eq 0) { Write-Host \"$ts READY\"; exit 0 } else { Write-Host \"$ts waiting...\"; Start-Sleep -Seconds 5 } }; Write-Host 'TIMEOUT'; exit 1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait: Docker Engine Ready (10m) v2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$desktop = Join-Path $env:ProgramFiles \"Docker\\Docker\\Docker Desktop.exe\"; $docker = Join-Path $env:ProgramFiles \"Docker\\Docker\\resources\\bin\\docker.exe\"; if (Test-Path $desktop) { Start-Process $desktop | Out-Null }; $deadline = (Get-Date).AddMinutes(10); while ((Get-Date) -lt $deadline) { $ts=(Get-Date).ToString('HH:mm:ss'); & $docker info *> $null; if ($LASTEXITCODE -eq 0) { Write-Host ($ts + ' READY'); exit 0 } else { Write-Host ($ts + ' waiting...'); Start-Sleep -Seconds 5 } }; Write-Host 'TIMEOUT'; exit 1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Dev: Web (agent)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:web"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "E2E: Tenant AI config smoke",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $api='http://localhost:4000'; $health=Invoke-RestMethod -Uri \"$api/health\"; Write-Host \"health ok=$($health.ok)\"; $bootBody=@{ tenantName='AI Smoke Tenant'; email=('manager+'+[Guid]::NewGuid().ToString('N').Substring(0,6)+'@demo.local'); password='password123'; displayName='Manager AI' } | ConvertTo-Json; $boot=Invoke-RestMethod -Method Post -Uri \"$api/dev/bootstrap\" -ContentType application/json -Body $bootBody; $tenantId=$boot.tenant.id; $userId=$boot.user.id; $role=$boot.user.role; Write-Host \"tenantId=$tenantId userId=$userId role=$role\"; $headers=@{ 'x-tenant-id'=$tenantId; 'x-user-id'=$userId; 'x-role'=$role }; $seedBody=@{ tenantId=$tenantId; salesmanCount=5 } | ConvertTo-Json; Invoke-RestMethod -Method Post -Uri \"$api/dev/seed\" -ContentType application/json -Body $seedBody | Out-Null; $cfg1=Invoke-RestMethod -Method Get -Uri \"$api/ai/config\" -Headers $headers; Write-Host (\"cfg provider=\"+$cfg1.config.provider+\" model=\"+$cfg1.config.openaiModel+\" hasKey=\"+$cfg1.config.hasOpenaiApiKey); $patchBody=@{ provider='OPENAI'; openaiModel='gpt-4o-mini' } | ConvertTo-Json; $cfg2=Invoke-RestMethod -Method Patch -Uri \"$api/ai/config\" -Headers $headers -ContentType application/json -Body $patchBody; if ($cfg2.warning) { Write-Host (\"patch warning=\"+$cfg2.warning) }; $cfg3=Invoke-RestMethod -Method Get -Uri \"$api/ai/config\" -Headers $headers; Write-Host (\"cfg after provider=\"+$cfg3.config.provider+\" model=\"+$cfg3.config.openaiModel+\" hasKey=\"+$cfg3.config.hasOpenaiApiKey); $ingestBody=@{ channel='WHATSAPP'; fullName='Test Customer'; phone='+971500000999'; customerMessage='Hi, need price and delivery ASAP' } | ConvertTo-Json; $ing=Invoke-RestMethod -Method Post -Uri \"$api/ingest/message\" -Headers @{ 'x-tenant-id'=$tenantId } -ContentType application/json -Body $ingestBody; Write-Host (\"ingest ok leadId=\"+$ing.leadId+\" triageReason=\"+$ing.triage.reason+\" escal=\"+$ing.draft.shouldEscalate); $lead=Invoke-RestMethod -Method Get -Uri (\"$api/leads/\"+$ing.leadId) -Headers $headers; Write-Host (\"lead heat=\"+$lead.lead.heat+\" lang=\"+$lead.lead.language+\" messages=\"+($lead.lead.messages.Count));"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "E2E: Tenant AI config smoke v2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"scripts\\e2e-ai-config.ps1"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: Typecheck (agent)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"typecheck",
+				"-ws"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

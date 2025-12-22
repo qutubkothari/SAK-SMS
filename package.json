@@ -1,0 +1,19 @@
+{
+  "name": "sak-ai-enquiry-handler",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @sak/web",
+    "dev:api": "npm run dev -w @sak/api",
+    "dev:web": "npm run dev -w @sak/web",
+    "db:up": "node scripts/docker-compose.mjs up -d",
+    "db:down": "node scripts/docker-compose.mjs down",
+    "lint": "npm run -ws lint",
+    "typecheck": "npm run -ws typecheck",
+    "build": "npm run -ws build"
+  }
+}

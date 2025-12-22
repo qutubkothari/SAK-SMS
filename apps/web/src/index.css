@@ -1,0 +1,257 @@
+/* Apple-like light UI with mint + soft yellow accents.
+   Keep this file valid CSS (no nested :root blocks, etc.). */
+
+:root {
+  color-scheme: light;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  line-height: 1.5;
+  font-weight: 400;
+
+  --bg: #f7faf9;
+  --surface: #ffffff;
+  --surface-2: #fbfdfc;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: rgba(15, 23, 42, 0.12);
+
+  --mint-50: #ecfdf5;
+  --mint-100: #d1fae5;
+  --mint-200: #a7f3d0;
+  --mint-500: #10b981;
+  --mint-600: #059669;
+  --mint-700: #047857;
+
+  --sun-50: #fffbeb;
+  --sun-100: #fef3c7;
+  --sun-500: #f59e0b;
+
+  --danger-50: #fff1f2;
+  --danger-500: #ef4444;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(900px 420px at 18% 10%, var(--mint-100), transparent 60%),
+    radial-gradient(700px 340px at 85% 0%, var(--sun-100), transparent 55%), var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--mint-700);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* App primitives used by App.tsx */
+.sak-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sak-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: saturate(180%) blur(10px);
+  background: rgba(255, 255, 255, 0.75);
+  border-bottom: 1px solid var(--border);
+}
+
+.sak-topbar__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.sak-topbar__nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sak-topbar__title {
+  margin-right: 8px;
+}
+
+.sak-topbar__spacer {
+  flex: 1;
+}
+
+.sak-topbar__controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sak-topbar__field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sak-topbar__label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.sak-topbar a {
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.sak-topbar a:hover {
+  background: rgba(16, 185, 129, 0.08);
+  text-decoration: none;
+}
+
+.sak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sak-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.7);
+}
+
+.sak-dot--mint {
+  background: var(--mint-600);
+}
+
+.sak-dot--sun {
+  background: var(--sun-500);
+}
+
+.sak-dot--danger {
+  background: var(--danger-500);
+}
+
+/* Form controls */
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(16, 185, 129, 0.65);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+}
+
+/* Buttons */
+button {
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.08));
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 120ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+button:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0px);
+  box-shadow: var(--shadow-sm);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover td {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+/* Small helpers */
+.muted {
+  color: var(--muted);
+}

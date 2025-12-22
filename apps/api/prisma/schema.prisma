@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  SALESMAN
+}
+
+enum LeadChannel {
+  MANUAL
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+  INDIAMART
+  OTHER
+}
+
+enum LeadHeat {
+  COLD
+  WARM
+  HOT
+  VERY_HOT
+  ON_FIRE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  WON
+  LOST
+  ON_HOLD
+}
+
+enum SuccessEventType {
+  DEMO_BOOKED
+  PAYMENT_RECEIVED
+  ORDER_RECEIVED
+  CONTRACT_SIGNED
+  CUSTOM
+}
+
+enum AiProvider {
+  MOCK
+  OPENAI
+  GEMINI
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  salesmen  Salesman[]
+  bots      Bot[]
+  leads     Lead[]
+  successDefinitions SuccessDefinition[]
+  successEvents      SuccessEvent[]
+
+  aiConfig  TenantAiConfig?
+}
+
+model TenantAiConfig {
+  id           String     @id @default(cuid())
+  tenantId     String     @unique
+  provider     AiProvider @default(MOCK)
+  openaiApiKey String?
+  openaiModel  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  role         Role
+  displayName  String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  salesmanProfile Salesman?
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Salesman {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String   @unique
+  isActive  Boolean  @default(true)
+  score     Float    @default(0)
+  capacity  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  assignedLeads Lead[] @relation("LeadAssignee")
+
+  successEvents SuccessEvent[]
+
+  @@index([tenantId])
+}
+
+model Bot {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  department String?
+  productTag String?
+  pricingMode String @default("ROUTE") // ROUTE | STANDARD
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  tenantId    String
+  channel     LeadChannel
+  externalId  String?
+  fullName    String?
+  phone       String?
+  email       String?
+  language    String     @default("en")
+  heat        LeadHeat   @default(COLD)
+  status      LeadStatus @default(NEW)
+
+  assignedToSalesmanId String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  assignee     Salesman? @relation("LeadAssignee", fields: [assignedToSalesmanId], references: [id])
+
+  events       LeadEvent[]
+  messages     Message[]
+  triageItems  TriageQueueItem[]
+  successEvents SuccessEvent[]
+
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, assignedToSalesmanId])
+}
+
+model SuccessDefinition {
+  id        String           @id @default(cuid())
+  tenantId  String
+  name      String
+  type      SuccessEventType
+  weight    Float            @default(1)
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id])
+  events    SuccessEvent[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model SuccessEvent {
+  id           String           @id @default(cuid())
+  tenantId     String
+  leadId       String
+  salesmanId   String?
+  definitionId String?
+  type         SuccessEventType
+  weight       Float
+  note         String?
+  createdAt    DateTime         @default(now())
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  lead         Lead             @relation(fields: [leadId], references: [id])
+  salesman     Salesman?        @relation(fields: [salesmanId], references: [id])
+  definition   SuccessDefinition? @relation(fields: [definitionId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, salesmanId])
+  @@index([tenantId, leadId])
+  @@index([tenantId, createdAt])
+}
+
+model LeadEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  leadId    String
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  lead      Lead     @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, leadId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  tenantId  String
+  leadId    String
+  direction String // IN | OUT
+  channel   LeadChannel
+  body      String
+  raw       Json?
+  createdAt DateTime @default(now())
+
+  lead      Lead     @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, leadId])
+}
+
+model TriageQueueItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  leadId      String
+  reason      String
+  suggestedSalesmanId String?
+  status      String   @default("OPEN") // OPEN | ASSIGNED | CLOSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead        Lead     @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
