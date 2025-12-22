@@ -363,6 +363,10 @@ export async function getSuccessAnalytics(days = 30) {
   return request<SuccessAnalytics>(`/analytics/success?days=${encodeURIComponent(String(days))}`)
 }
 
+export async function getDashboardStats() {
+  return request<any>('/analytics/dashboard')
+}
+
 export async function createSuccessDefinition(payload: {
   name: string
   type: SuccessEventType

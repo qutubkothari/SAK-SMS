@@ -573,6 +573,64 @@ routes.post(
   })
 );
 
+// Dashboard stats (overview metrics)
+routes.get(
+  '/analytics/dashboard',
+  asyncHandler(async (req, res) => {
+    const { tenantId } = getAuthContext(req);
+
+    const [totalLeads, newLeads, activeLeads, convertedLeads, totalTriageOpen, totalSalesmen, recentSuccessEvents] = await Promise.all([
+      prisma.lead.count({ where: { tenantId } }),
+      prisma.lead.count({ where: { tenantId, status: 'NEW' } }),
+      prisma.lead.count({ where: { tenantId, status: { in: ['CONTACTED', 'QUALIFIED', 'QUOTED'] } } }),
+      prisma.lead.count({ where: { tenantId, status: 'WON' } }),
+      prisma.triageQueueItem.count({ where: { tenantId, status: 'OPEN' } }),
+      prisma.salesman.count({ where: { tenantId } }),
+      prisma.successEvent.findMany({
+        where: { tenantId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          definition: true,
+          lead: { select: { fullName: true, phone: true } }
+        }
+      })
+    ]);
+
+    const leadsByStatus = await prisma.lead.groupBy({
+      by: ['status'],
+      where: { tenantId },
+      _count: { _all: true }
+    });
+
+    const leadsByHeat = await prisma.lead.groupBy({
+      by: ['heat'],
+      where: { tenantId },
+      _count: { _all: true }
+    });
+
+    const leadsByChannel = await prisma.lead.groupBy({
+      by: ['channel'],
+      where: { tenantId },
+      _count: { _all: true }
+    });
+
+    res.json({
+      ok: true,
+      totalLeads,
+      newLeads,
+      activeLeads,
+      convertedLeads,
+      totalTriageOpen,
+      totalSalesmen,
+      leadsByStatus: leadsByStatus.map((x) => ({ status: x.status, count: x._count._all })),
+      leadsByHeat: leadsByHeat.map((x) => ({ heat: x.heat, count: x._count._all })),
+      leadsByChannel: leadsByChannel.map((x) => ({ channel: x.channel, count: x._count._all })),
+      recentSuccessEvents
+    });
+  })
+);
+
 // Success analytics (simple aggregates for dashboards)
 routes.get(
   '/analytics/success',
