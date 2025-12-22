@@ -740,6 +740,10 @@ function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (
 function LeadsPage({ onError }: { onError: (m: string) => void }) {
   const { t } = useTranslation()
   const [leads, setLeads] = useState<any[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [heatFilter, setHeatFilter] = useState<string>('ALL')
+  const [channelFilter, setChannelFilter] = useState<string>('ALL')
 
   async function refresh() {
     try {
@@ -755,14 +759,96 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      // Search term filter (name, phone, email, id)
+      const term = searchTerm.toLowerCase()
+      const matchesSearch =
+        !term ||
+        (l.fullName?.toLowerCase().includes(term)) ||
+        (l.phone?.toLowerCase().includes(term)) ||
+        (l.email?.toLowerCase().includes(term)) ||
+        l.id.toLowerCase().includes(term)
+
+      // Status filter
+      const matchesStatus = statusFilter === 'ALL' || l.status === statusFilter
+
+      // Heat filter
+      const matchesHeat = heatFilter === 'ALL' || l.heat === heatFilter
+
+      // Channel filter
+      const matchesChannel = channelFilter === 'ALL' || l.channel === channelFilter
+
+      return matchesSearch && matchesStatus && matchesHeat && matchesChannel
+    })
+  }, [leads, searchTerm, statusFilter, heatFilter, channelFilter])
+
   return (
     <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div className="sak-card" style={{ padding: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>{t('leads')}</h2>
           <button onClick={refresh}>{t('refresh')}</button>
+          <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
+            {filteredLeads.length} / {leads.length}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search name, phone, email, ID..."
+            style={{ minWidth: 250, flex: 1 }}
+          />
+
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="ALL">All Status</option>
+            <option value="NEW">NEW</option>
+            <option value="CONTACTED">CONTACTED</option>
+            <option value="QUALIFIED">QUALIFIED</option>
+            <option value="QUOTED">QUOTED</option>
+            <option value="WON">WON</option>
+            <option value="LOST">LOST</option>
+            <option value="ON_HOLD">ON_HOLD</option>
+          </select>
+
+          <select value={heatFilter} onChange={(e) => setHeatFilter(e.target.value)}>
+            <option value="ALL">All Heat</option>
+            <option value="ON_FIRE">ON_FIRE</option>
+            <option value="VERY_HOT">VERY_HOT</option>
+            <option value="HOT">HOT</option>
+            <option value="WARM">WARM</option>
+            <option value="COLD">COLD</option>
+          </select>
+
+          <select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)}>
+            <option value="ALL">All Channels</option>
+            <option value="WHATSAPP">WHATSAPP</option>
+            <option value="FACEBOOK">FACEBOOK</option>
+            <option value="INSTAGRAM">INSTAGRAM</option>
+            <option value="INDIAMART">INDIAMART</option>
+            <option value="MANUAL">MANUAL</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+
+          {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || channelFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSearchTerm('')
+                setStatusFilter('ALL')
+                setHeatFilter('ALL')
+                setChannelFilter('ALL')
+              }}
+              style={{ opacity: 0.7 }}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
+
       <table style={{ marginTop: 12 }}>
         <thead>
           <tr>
@@ -770,10 +856,11 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
             <th align="left">{t('channel')}</th>
             <th align="left">{t('status')}</th>
             <th align="left">{t('heat')}</th>
+            <th align="left">{t('assignedTo')}</th>
           </tr>
         </thead>
         <tbody>
-          {leads.map((l) => (
+          {filteredLeads.map((l) => (
             <tr key={l.id}>
               <td>
                 <Link to={`/leads/${l.id}`}>{l.fullName ?? l.phone ?? l.id}</Link>
@@ -791,11 +878,18 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
                   text={l.heat}
                 />
               </td>
+              <td style={{ opacity: l.assignedToSalesmanId ? 1 : 0.5 }}>
+                {l.assignedToSalesmanId ? l.assignedToSalesmanId.slice(0, 8) : t('unassigned')}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {leads.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No leads yet.</div> : null}
+      {filteredLeads.length === 0 ? (
+        <div style={{ marginTop: 12, opacity: 0.8 }}>
+          {leads.length === 0 ? 'No leads yet.' : 'No leads match the current filters.'}
+        </div>
+      ) : null}
     </div>
   )
 }
