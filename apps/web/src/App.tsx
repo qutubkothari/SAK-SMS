@@ -18,6 +18,8 @@ import {
   getSuccessAnalytics,
   getAiConfig,
   getLead,
+  getLeadNotes,
+  addLeadNote,
   importLeadsCsv,
   ingestMessage,
   listNotifications,
@@ -1231,7 +1233,9 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [successDefs, setSuccessDefs] = useState<any[]>([])
   const [selectedSuccessDefId, setSelectedSuccessDefId] = useState<string>('')
   const [successNote, setSuccessNote] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'overview' | 'timeline'>('overview')
+  const [viewMode, setViewMode] = useState<'overview' | 'timeline' | 'notes'>('overview')
+  const [notes, setNotes] = useState<any[]>([])
+  const [newNoteContent, setNewNoteContent] = useState<string>('')
   const canAssign = useMemo(() => {
     if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
     return role !== 'SALESMAN'
@@ -1246,8 +1250,18 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     }
   }
 
+  async function refreshNotes() {
+    try {
+      const out = await getLeadNotes(leadId)
+      setNotes(out.notes)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to load notes')
+    }
+  }
+
   useEffect(() => {
     refresh()
+    refreshNotes()
     ;(async () => {
       try {
         if (canAssign) {
@@ -1301,6 +1315,9 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           </button>
           <button onClick={() => setViewMode('timeline')} style={{ fontWeight: viewMode === 'timeline' ? 'bold' : 'normal' }}>
             Timeline
+          </button>
+          <button onClick={() => setViewMode('notes')} style={{ fontWeight: viewMode === 'notes' ? 'bold' : 'normal' }}>
+            Notes ({notes.length})
           </button>
         </div>
       </div>
@@ -1479,6 +1496,53 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       {item.data.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{item.data.note}</div> : null}
                     </div>
                   ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : viewMode === 'notes' ? (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Notes & Activity</h3>
+          
+          <div style={{ marginBottom: 20 }}>
+            <textarea
+              value={newNoteContent}
+              onChange={(e) => setNewNoteContent(e.target.value)}
+              placeholder="Add a note or comment..."
+              rows={3}
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <button
+              className="primary"
+              onClick={async () => {
+                if (!newNoteContent.trim()) return
+                try {
+                  await addLeadNote(leadId, newNoteContent)
+                  setNewNoteContent('')
+                  onInfo('Note added')
+                  await refreshNotes()
+                } catch (e) {
+                  onError(e instanceof Error ? e.message : 'Failed to add note')
+                }
+              }}
+              disabled={!newNoteContent.trim()}
+            >
+              Add Note
+            </button>
+          </div>
+
+          {notes.length === 0 ? (
+            <div style={{ opacity: 0.8 }}>No notes yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {notes.map((note) => (
+                <div key={note.id} className="sak-card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{note.user.displayName}</div>
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>{new Date(note.createdAt).toLocaleString()}</div>
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{note.content}</div>
                 </div>
               ))}
             </div>

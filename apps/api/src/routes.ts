@@ -1345,6 +1345,89 @@ routes.post(
   })
 );
 
+// Notes - Activity tracking
+routes.get(
+  '/leads/:id/notes',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
+    if (!lead) throw new Error('Lead not found');
+
+    // Check salesman access
+    if (role === 'SALESMAN') {
+      const salesman = await prisma.salesman.findFirst({ where: { tenantId, userId } });
+      if (!salesman || lead.assignedToSalesmanId !== salesman.id) {
+        throw new Error('Forbidden');
+      }
+    }
+
+    const notes = await prisma.note.findMany({
+      where: { leadId, tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Fetch user display names for notes
+    const userIds = [...new Set(notes.map(n => n.userId))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, displayName: true, email: true }
+    });
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    const notesWithUsers = notes.map(note => ({
+      id: note.id,
+      content: note.content,
+      createdAt: note.createdAt.toISOString(),
+      updatedAt: note.updatedAt.toISOString(),
+      user: userMap.get(note.userId) || { id: note.userId, displayName: 'Unknown', email: null }
+    }));
+
+    res.json({ notes: notesWithUsers });
+  })
+);
+
+routes.post(
+  '/leads/:id/notes',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+    const body = z.object({ content: z.string().min(1).max(5000) }).parse(req.body);
+
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
+    if (!lead) throw new Error('Lead not found');
+
+    // Check salesman access
+    if (role === 'SALESMAN') {
+      const salesman = await prisma.salesman.findFirst({ where: { tenantId, userId } });
+      if (!salesman || lead.assignedToSalesmanId !== salesman.id) {
+        throw new Error('Forbidden');
+      }
+    }
+
+    const note = await prisma.note.create({
+      data: {
+        tenantId,
+        leadId,
+        userId,
+        content: body.content
+      }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId,
+        type: 'NOTE_ADDED',
+        payload: { noteId: note.id, userId }
+      }
+    });
+
+    res.json({ ok: true, note: { id: note.id, content: note.content, createdAt: note.createdAt.toISOString() } });
+  })
+);
+
 // AI stubs (MOCK) – will be used by WhatsApp ingestion pipeline later.
 routes.post(
   '/ai/triage',

@@ -300,6 +300,17 @@ export async function reopenTriageItem(triageId: string) {
   return request<{ ok: true }>(`/triage/${triageId}/reopen`, { method: 'POST', body: '{}' })
 }
 
+export async function getLeadNotes(leadId: string) {
+  return request<{ notes: Array<{ id: string; content: string; createdAt: string; updatedAt: string; user: { id: string; displayName: string; email: string | null } }> }>(`/leads/${leadId}/notes`)
+}
+
+export async function addLeadNote(leadId: string, content: string) {
+  return request<{ ok: true; note: { id: string; content: string; createdAt: string } }>(`/leads/${leadId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ content })
+  })
+}
+
 export async function devBootstrap(payload: {
   tenantName: string
   email: string
