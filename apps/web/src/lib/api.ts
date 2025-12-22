@@ -1,5 +1,14 @@
 export type Role = 'OWNER' | 'ADMIN' | 'MANAGER' | 'SALESMAN'
 
+export type AuthMode = 'cookie' | 'dev_headers'
+
+export function authMode(): AuthMode {
+  const mode = (import.meta as any).env?.VITE_AUTH_MODE as string | undefined
+  if (mode === 'dev_headers') return 'dev_headers'
+  if (mode === 'cookie') return 'cookie'
+  return (import.meta as any).env?.DEV ? 'dev_headers' : 'cookie'
+}
+
 export type DevAuth = {
   tenantId: string
   userId: string
@@ -7,6 +16,16 @@ export type DevAuth = {
 }
 
 const STORAGE_KEY = 'sak.devAuth'
+
+const TENANT_KEY = 'sak.tenantId'
+
+export function loadTenantId(): string {
+  return localStorage.getItem(TENANT_KEY) ?? ''
+}
+
+export function saveTenantId(tenantId: string) {
+  localStorage.setItem(TENANT_KEY, tenantId)
+}
 
 export function loadDevAuth(): DevAuth {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -30,16 +49,21 @@ function baseUrl(): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const auth = loadDevAuth()
   const headers = new Headers(init?.headers)
 
-  if (auth.tenantId) headers.set('x-tenant-id', auth.tenantId)
-  if (auth.userId) headers.set('x-user-id', auth.userId)
-  if (auth.role) headers.set('x-role', auth.role)
+  if (authMode() === 'dev_headers') {
+    const auth = loadDevAuth()
+    if (auth.tenantId) headers.set('x-tenant-id', auth.tenantId)
+    if (auth.userId) headers.set('x-user-id', auth.userId)
+    if (auth.role) headers.set('x-role', auth.role)
+  } else {
+    const tenantId = loadTenantId()
+    if (tenantId) headers.set('x-tenant-id', tenantId)
+  }
 
   if (!headers.has('content-type')) headers.set('content-type', 'application/json')
 
-  const res = await fetch(`${baseUrl()}${path}`, { ...init, headers })
+  const res = await fetch(`${baseUrl()}${path}`, { ...init, headers, credentials: 'include' })
   const data = await res.json().catch(() => ({}))
 
   if (!res.ok) {
@@ -48,6 +72,61 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return data as T
+}
+
+export type SessionUser = {
+  id: string
+  tenantId: string
+  role: Role
+  email: string
+  displayName: string
+}
+
+export async function login(payload: { tenantId: string; email: string; password: string }) {
+  saveTenantId(payload.tenantId)
+  return request<{ ok: true; user: SessionUser }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function me() {
+  return request<{ ok: true; user: SessionUser }>('/auth/me')
+}
+
+export async function logout() {
+  return request<{ ok: true }>('/auth/logout', { method: 'POST' })
+}
+
+export type Notification = {
+  id: string
+  type: string
+  title: string
+  body?: string | null
+  entityType?: string | null
+  entityId?: string | null
+  readAt?: string | null
+  createdAt: string
+}
+
+export async function listNotifications(payload?: { unreadOnly?: boolean; limit?: number }) {
+  const q = new URLSearchParams()
+  if (payload?.unreadOnly) q.set('unreadOnly', '1')
+  if (payload?.limit) q.set('limit', String(payload.limit))
+  const suffix = q.toString() ? `?${q.toString()}` : ''
+  return request<{ notifications: Notification[] }>(`/notifications${suffix}`)
+}
+
+export async function getUnreadNotificationCount() {
+  return request<{ count: number }>('/notifications/unread-count')
+}
+
+export async function markNotificationRead(id: string) {
+  return request<{ ok: true }>(`/notifications/${id}/read`, { method: 'POST', body: '{}' })
+}
+
+export async function markAllNotificationsRead() {
+  return request<{ ok: true }>('/notifications/read-all', { method: 'POST', body: '{}' })
 }
 
 export type Lead = {
@@ -72,6 +151,8 @@ export type TriageItem = {
   createdAt: string
   lead: Lead
 }
+
+export type TriageStatusFilter = 'OPEN' | 'ASSIGNED' | 'CLOSED' | 'ALL'
 
 export type Salesman = {
   id: string
@@ -147,8 +228,9 @@ export async function assignLead(id: string, salesmanId: string | null) {
   })
 }
 
-export async function listTriage() {
-  return request<{ items: TriageItem[] }>('/triage')
+export async function listTriage(status: TriageStatusFilter = 'OPEN') {
+  const q = status ? `?status=${encodeURIComponent(status)}` : ''
+  return request<{ items: TriageItem[] }>(`/triage${q}`)
 }
 
 export async function assignTriageItem(triageId: string, salesmanId: string) {
@@ -156,6 +238,17 @@ export async function assignTriageItem(triageId: string, salesmanId: string) {
     method: 'POST',
     body: JSON.stringify({ salesmanId })
   })
+}
+
+export async function closeTriageItem(triageId: string, payload?: { note?: string }) {
+  return request<{ ok: true }>(`/triage/${triageId}/close`, {
+    method: 'POST',
+    body: JSON.stringify(payload ?? {})
+  })
+}
+
+export async function reopenTriageItem(triageId: string) {
+  return request<{ ok: true }>(`/triage/${triageId}/reopen`, { method: 'POST', body: '{}' })
 }
 
 export async function devBootstrap(payload: {
@@ -212,6 +305,20 @@ export async function ingestMessage(payload: {
 
 export async function listSuccessDefinitions() {
   return request<{ definitions: SuccessDefinition[] }>('/success-definitions')
+}
+
+export type SuccessAnalytics = {
+  ok: true
+  days: number
+  since: string
+  eventsByType: Array<{ type: string; count: number; weight: number }>
+  leadStatusCounts: Array<{ status: string; count: number }>
+  leadHeatCounts: Array<{ heat: string; count: number }>
+  leaderboard: Array<{ salesmanId: string; displayName: string; email: string | null; events: number; weight: number }>
+}
+
+export async function getSuccessAnalytics(days = 30) {
+  return request<SuccessAnalytics>(`/analytics/success?days=${encodeURIComponent(String(days))}`)
 }
 
 export async function createSuccessDefinition(payload: {

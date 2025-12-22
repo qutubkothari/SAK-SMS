@@ -68,6 +68,8 @@ model Tenant {
   successDefinitions SuccessDefinition[]
   successEvents      SuccessEvent[]
 
+  notifications Notification[]
+
   aiConfig  TenantAiConfig?
 }
 
@@ -100,8 +102,31 @@ model User {
 
   salesmanProfile Salesman?
 
+  notifications Notification[]
+
   @@unique([tenantId, email])
   @@index([tenantId])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  type       String
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, userId, readAt])
+  @@index([tenantId, createdAt])
 }
 
 model Salesman {

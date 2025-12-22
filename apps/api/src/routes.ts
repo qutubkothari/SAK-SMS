@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from './db.js';
 import { asyncHandler } from './http.js';
-import { getAuthContext, getTenantId, hashPassword } from './auth.js';
+import { HttpError } from './http.js';
+import { clearAuthCookie, getAuthContext, getTenantId, hashPassword, setAuthCookie, signAuthToken, verifyPassword } from './auth.js';
 import { createAiGatewayForTenant } from './ai/tenantAi.js';
 import { pickSalesmanRoundRobin } from './services/routing.js';
 import { recomputeSalesmanScores } from './services/scoring.js';
@@ -11,7 +12,233 @@ export const routes = Router();
 
 // AI gateway is resolved per-tenant (DB-configurable) with env fallback.
 
+async function createNotificationForUser(params: {
+  tenantId: string;
+  userId: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+}) {
+  try {
+    await prisma.notification.create({
+      data: {
+        tenantId: params.tenantId,
+        userId: params.userId,
+        type: params.type,
+        title: params.title,
+        body: params.body ?? null,
+        entityType: params.entityType ?? null,
+        entityId: params.entityId ?? null
+      }
+    });
+  } catch (err) {
+    // If migrations aren't applied yet, keep the app usable.
+    // eslint-disable-next-line no-console
+    console.warn(
+      'Failed to create notification (missing migration?):',
+      err instanceof Error ? err.message : err
+    );
+  }
+}
+
+async function notifyTenantRoles(params: {
+  tenantId: string;
+  roles: Array<'OWNER' | 'ADMIN' | 'MANAGER' | 'SALESMAN'>;
+  type: string;
+  title: string;
+  body?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+}) {
+  const users: Array<{ id: string }> = await prisma.user.findMany({
+    where: { tenantId: params.tenantId, active: true, role: { in: params.roles } },
+    select: { id: true }
+  });
+
+  await Promise.all(
+    users.map((u: { id: string }) =>
+      createNotificationForUser({
+        tenantId: params.tenantId,
+        userId: u.id,
+        type: params.type,
+        title: params.title,
+        body: params.body,
+        entityType: params.entityType,
+        entityId: params.entityId
+      })
+    )
+  );
+}
+
 routes.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Notifications (per-user)
+routes.get(
+  '/notifications',
+  asyncHandler(async (req, res) => {
+    const { tenantId, userId } = getAuthContext(req);
+
+    const unreadOnly = z
+      .preprocess((v) => (v === undefined ? undefined : String(v)), z.enum(['1', '0']).optional())
+      .parse((req.query as any)?.unreadOnly);
+
+    const limit = z
+      .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().int().min(1).max(100).default(20))
+      .parse((req.query as any)?.limit);
+
+    try {
+      const notifications = await prisma.notification.findMany({
+        where: {
+          tenantId,
+          userId,
+          ...(unreadOnly === '1' ? { readAt: null } : {})
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit
+      });
+
+      res.json({ notifications });
+    } catch (err) {
+      // If migrations aren't applied yet, keep the app usable.
+      // eslint-disable-next-line no-console
+      console.warn(
+        'GET /notifications failed (missing migration?):',
+        err instanceof Error ? err.message : err
+      );
+      res.json({ notifications: [], warning: 'Notifications table missing (run migrations)' });
+    }
+  })
+);
+
+routes.get(
+  '/notifications/unread-count',
+  asyncHandler(async (req, res) => {
+    const { tenantId, userId } = getAuthContext(req);
+    try {
+      const count = await prisma.notification.count({ where: { tenantId, userId, readAt: null } });
+      res.json({ count });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'GET /notifications/unread-count failed (missing migration?):',
+        err instanceof Error ? err.message : err
+      );
+      res.json({ count: 0, warning: 'Notifications table missing (run migrations)' });
+    }
+  })
+);
+
+routes.post(
+  '/notifications/:id/read',
+  asyncHandler(async (req, res) => {
+    const { tenantId, userId } = getAuthContext(req);
+    const notificationId = z.string().parse(req.params.id);
+
+    try {
+      await prisma.notification.updateMany({
+        where: { id: notificationId, tenantId, userId, readAt: null },
+        data: { readAt: new Date() }
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'POST /notifications/:id/read failed (missing migration?):',
+        err instanceof Error ? err.message : err
+      );
+    }
+
+    res.json({ ok: true });
+  })
+);
+
+routes.post(
+  '/notifications/read-all',
+  asyncHandler(async (req, res) => {
+    const { tenantId, userId } = getAuthContext(req);
+    try {
+      await prisma.notification.updateMany({
+        where: { tenantId, userId, readAt: null },
+        data: { readAt: new Date() }
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'POST /notifications/read-all failed (missing migration?):',
+        err instanceof Error ? err.message : err
+      );
+    }
+    res.json({ ok: true });
+  })
+);
+
+// Auth
+routes.post(
+  '/auth/login',
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        tenantId: z.string().min(1),
+        email: z.string().email(),
+        password: z.string().min(1)
+      })
+      .parse(req.body);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        tenantId: body.tenantId,
+        email: body.email.toLowerCase(),
+        active: true
+      }
+    });
+    if (!user) throw new HttpError(401, 'Invalid credentials');
+
+    const ok = await verifyPassword(body.password, user.passwordHash);
+    if (!ok) throw new HttpError(401, 'Invalid credentials');
+
+    const token = signAuthToken({ tenantId: user.tenantId, userId: user.id, role: user.role as any });
+    setAuthCookie(res, token);
+
+    res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        email: user.email,
+        displayName: user.displayName
+      }
+    });
+  })
+);
+
+routes.get(
+  '/auth/me',
+  asyncHandler(async (req, res) => {
+    const { tenantId, userId } = getAuthContext(req);
+    const user = await prisma.user.findFirst({ where: { id: userId, tenantId, active: true } });
+    if (!user) throw new HttpError(401, 'Unauthorized');
+    res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        email: user.email,
+        displayName: user.displayName
+      }
+    });
+  })
+);
+
+routes.post(
+  '/auth/logout',
+  asyncHandler(async (_req, res) => {
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  })
+);
 
 // Tenant AI configuration (manager/admin only)
 routes.get(
@@ -161,6 +388,10 @@ routes.patch(
 routes.post(
   '/dev/bootstrap',
   asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEV_ROUTES !== 'true') {
+      throw new HttpError(403, 'Forbidden');
+    }
+
     const body = z
       .object({
         tenantName: z.string().min(1),
@@ -342,10 +573,89 @@ routes.post(
   })
 );
 
+// Success analytics (simple aggregates for dashboards)
+routes.get(
+  '/analytics/success',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const days = z
+      .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().int().min(1).max(365).default(30))
+      .parse((req.query as any)?.days);
+
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [eventsByType, leadStatusCounts, leadHeatCounts, salesmanAgg] = await Promise.all([
+      prisma.successEvent.groupBy({
+        by: ['type'],
+        where: { tenantId, createdAt: { gte: since } },
+        _count: { _all: true },
+        _sum: { weight: true }
+      }),
+      prisma.lead.groupBy({
+        by: ['status'],
+        where: { tenantId },
+        _count: { _all: true }
+      }),
+      prisma.lead.groupBy({
+        by: ['heat'],
+        where: { tenantId },
+        _count: { _all: true }
+      }),
+      prisma.successEvent.groupBy({
+        by: ['salesmanId'],
+        where: { tenantId, createdAt: { gte: since } },
+        _count: { _all: true },
+        _sum: { weight: true }
+      })
+    ]);
+
+    const salesmanIds = salesmanAgg.map((x) => x.salesmanId).filter((id): id is string => Boolean(id));
+    const salesmen = salesmanIds.length
+      ? await prisma.salesman.findMany({
+          where: { tenantId, id: { in: salesmanIds } },
+          include: { user: true }
+        })
+      : [];
+
+    const salesmanById = new Map(salesmen.map((s) => [s.id, s] as const));
+
+    const leaderboard = salesmanAgg
+      .filter((x) => Boolean(x.salesmanId))
+      .map((x) => {
+        const salesman = salesmanById.get(x.salesmanId as string);
+        return {
+          salesmanId: x.salesmanId as string,
+          displayName: salesman?.user.displayName ?? x.salesmanId,
+          email: salesman?.user.email ?? null,
+          events: x._count._all,
+          weight: x._sum.weight ?? 0
+        };
+      })
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 10);
+
+    res.json({
+      ok: true,
+      days,
+      since: since.toISOString(),
+      eventsByType: eventsByType.map((x) => ({ type: x.type, count: x._count._all, weight: x._sum.weight ?? 0 })),
+      leadStatusCounts: leadStatusCounts.map((x) => ({ status: x.status, count: x._count._all })),
+      leadHeatCounts: leadHeatCounts.map((x) => ({ heat: x.heat, count: x._count._all })),
+      leaderboard
+    });
+  })
+);
+
 // Dev seed: create 5 salesman users + profiles and a few leads.
 routes.post(
   '/dev/seed',
   asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEV_ROUTES !== 'true') {
+      throw new HttpError(403, 'Forbidden');
+    }
+
     const body = z
       .object({
         tenantId: z.string().min(1),
@@ -590,14 +900,80 @@ routes.get(
     const { tenantId, role } = getAuthContext(req);
     if (role === 'SALESMAN') throw new Error('Forbidden');
 
+    const statusParam = z
+      .enum(['OPEN', 'ASSIGNED', 'CLOSED', 'ALL'])
+      .optional()
+      .parse((req.query as any)?.status);
+
     const items = await prisma.triageQueueItem.findMany({
-      where: { tenantId, status: 'OPEN' },
+      where: {
+        tenantId,
+        ...(statusParam && statusParam !== 'ALL' ? { status: statusParam } : {})
+      },
       include: { lead: true },
       orderBy: { createdAt: 'asc' },
       take: 200
     });
 
     res.json({ items });
+  })
+);
+
+routes.post(
+  '/triage/:id/close',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const triageId = z.string().parse(req.params.id);
+    const body = z.object({ note: z.string().max(500).optional() }).parse(req.body ?? {});
+
+    const item = await prisma.triageQueueItem.findFirst({ where: { id: triageId, tenantId } });
+    if (!item) throw new Error('Triage item not found');
+
+    await prisma.triageQueueItem.update({
+      where: { id: item.id },
+      data: { status: 'CLOSED' }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId: item.leadId,
+        type: 'TRIAGE_CLOSED',
+        payload: { triageId: item.id, byRole: role, byUserId: userId, note: body.note ?? null }
+      }
+    });
+
+    res.json({ ok: true });
+  })
+);
+
+routes.post(
+  '/triage/:id/reopen',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const triageId = z.string().parse(req.params.id);
+    const item = await prisma.triageQueueItem.findFirst({ where: { id: triageId, tenantId } });
+    if (!item) throw new Error('Triage item not found');
+
+    await prisma.triageQueueItem.update({
+      where: { id: item.id },
+      data: { status: 'OPEN', suggestedSalesmanId: null }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId: item.leadId,
+        type: 'TRIAGE_REOPENED',
+        payload: { triageId: item.id, byRole: role, byUserId: userId }
+      }
+    });
+
+    res.json({ ok: true });
   })
 );
 
@@ -626,6 +1002,25 @@ routes.post(
       data: { status: 'ASSIGNED', suggestedSalesmanId: salesman.id }
     });
 
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId: item.leadId,
+        type: 'TRIAGE_ASSIGNED',
+        payload: { triageId: item.id, assignedToSalesmanId: salesman.id, byRole: role }
+      }
+    });
+
+    await createNotificationForUser({
+      tenantId,
+      userId: salesman.userId,
+      type: 'LEAD_ASSIGNED',
+      title: 'New lead assigned',
+      body: `Lead ${item.leadId} assigned to you`,
+      entityType: 'Lead',
+      entityId: item.leadId
+    });
+
     res.json({ ok: true });
   })
 );
@@ -646,6 +1041,16 @@ routes.post(
     if (body.salesmanId) {
       const salesman = await prisma.salesman.findFirst({ where: { id: body.salesmanId, tenantId } });
       if (!salesman) throw new Error('Salesman not found');
+
+      await createNotificationForUser({
+        tenantId,
+        userId: salesman.userId,
+        type: 'LEAD_ASSIGNED',
+        title: 'New lead assigned',
+        body: `Lead ${lead.id} assigned to you`,
+        entityType: 'Lead',
+        entityId: lead.id
+      });
     }
 
     await prisma.lead.update({
@@ -757,10 +1162,234 @@ routes.post(
             reason: draft.escalationReason ?? 'AI_ESCALATION'
           }
         });
+
+        await notifyTenantRoles({
+          tenantId,
+          roles: ['OWNER', 'ADMIN', 'MANAGER'],
+          type: 'TRIAGE_ESCALATED',
+          title: 'Triage escalation',
+          body: `${draft.escalationReason ?? 'AI_ESCALATION'} (lead ${lead.fullName ?? lead.phone ?? lead.id})`,
+          entityType: 'Lead',
+          entityId: lead.id
+        });
       }
     }
 
     res.json({ draft });
+  })
+);
+
+const ingestMessageBodySchema = z.object({
+  botId: z.string().optional(),
+  channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+  externalId: z.string().optional(),
+  fullName: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  customerMessage: z.string().min(1).optional(),
+  text: z.string().min(1).optional()
+});
+
+const ingestMessageSchema = ingestMessageBodySchema.refine((v) => Boolean(v.customerMessage ?? v.text), {
+  path: ['customerMessage'],
+  message: 'Required'
+});
+
+async function handleIngestMessage(params: {
+  tenantId: string;
+  body: z.infer<typeof ingestMessageSchema>;
+}) {
+  const { tenantId, body } = params;
+
+  const customerMessage = body.customerMessage ?? body.text;
+  if (!customerMessage) throw new Error('customerMessage is required');
+
+  const bot = body.botId
+    ? await prisma.bot.findFirst({ where: { id: body.botId, tenantId, isActive: true } })
+    : null;
+
+  // Try to find an existing lead (by channel+externalId, else phone/email).
+  const lead = await (async () => {
+    if (body.externalId) {
+      const found = await prisma.lead.findFirst({
+        where: { tenantId, channel: body.channel, externalId: body.externalId }
+      });
+      if (found) return found;
+    }
+
+    if (body.phone) {
+      const found = await prisma.lead.findFirst({ where: { tenantId, phone: body.phone } });
+      if (found) return found;
+    }
+
+    if (body.email) {
+      const found = await prisma.lead.findFirst({ where: { tenantId, email: body.email } });
+      if (found) return found;
+    }
+
+    return prisma.lead.create({
+      data: {
+        tenantId,
+        channel: body.channel,
+        externalId: body.externalId,
+        fullName: body.fullName,
+        phone: body.phone,
+        email: body.email,
+        language: 'en'
+      }
+    });
+  })();
+
+  await prisma.message.create({
+    data: {
+      tenantId,
+      leadId: lead.id,
+      direction: 'IN',
+      channel: body.channel,
+      body: customerMessage,
+      raw: { botId: bot?.id ?? null }
+    }
+  });
+
+  const ai = await createAiGatewayForTenant(prisma, tenantId);
+
+  // AI triage updates language + heat.
+  const triage = await ai.triage({
+    leadId: lead.id,
+    channel: lead.channel,
+    customerMessage
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { language: triage.language, heat: triage.heat }
+  });
+
+  await prisma.leadEvent.create({
+    data: {
+      tenantId,
+      leadId: lead.id,
+      type: 'AI_TRIAGE',
+      payload: triage
+    }
+  });
+
+  const pricingAllowed = bot?.pricingMode === 'STANDARD';
+  const draft = await ai.draftReply({
+    leadId: lead.id,
+    channel: lead.channel,
+    customerMessage,
+    pricingAllowed
+  });
+
+  await prisma.leadEvent.create({
+    data: {
+      tenantId,
+      leadId: lead.id,
+      type: 'AI_DRAFT_REPLY',
+      payload: { ...draft, botId: bot?.id ?? null }
+    }
+  });
+
+  if (draft.shouldEscalate) {
+    const existing = await prisma.triageQueueItem.findFirst({
+      where: { tenantId, leadId: lead.id, status: 'OPEN' }
+    });
+
+    if (!existing) {
+      await prisma.triageQueueItem.create({
+        data: {
+          tenantId,
+          leadId: lead.id,
+          reason: draft.escalationReason ?? 'AI_ESCALATION',
+          suggestedSalesmanId: null
+        }
+      });
+
+      await notifyTenantRoles({
+        tenantId,
+        roles: ['OWNER', 'ADMIN', 'MANAGER'],
+        type: 'TRIAGE_ESCALATED',
+        title: 'Triage escalation',
+        body: `${draft.escalationReason ?? 'AI_ESCALATION'} (lead ${lead.fullName ?? lead.phone ?? lead.id})`,
+        entityType: 'Lead',
+        entityId: lead.id
+      });
+    }
+  } else {
+    // Auto-assign if unassigned.
+    const current = await prisma.lead.findFirst({
+      where: { id: lead.id, tenantId },
+      select: { assignedToSalesmanId: true }
+    });
+
+    if (!current?.assignedToSalesmanId) {
+      const picked = await pickSalesmanRoundRobin(prisma, tenantId, lead.id);
+      if (picked) {
+        await prisma.lead.update({ where: { id: lead.id }, data: { assignedToSalesmanId: picked.id } });
+        await prisma.leadEvent.create({
+          data: {
+            tenantId,
+            leadId: lead.id,
+            type: 'AUTO_ASSIGNED',
+            payload: { salesmanId: picked.id, mode: 'WEIGHTED' }
+          }
+        });
+
+        await createNotificationForUser({
+          tenantId,
+          userId: picked.userId,
+          type: 'LEAD_ASSIGNED',
+          title: 'New lead assigned',
+          body: `${lead.fullName ?? lead.phone ?? lead.id}`,
+          entityType: 'Lead',
+          entityId: lead.id
+        });
+      }
+    }
+
+    // Persist the assistant reply as an OUT message (simulation).
+    await prisma.message.create({
+      data: {
+        tenantId,
+        leadId: lead.id,
+        direction: 'OUT',
+        channel: body.channel,
+        body: draft.message,
+        raw: { botId: bot?.id ?? null, simulated: true }
+      }
+    });
+  }
+
+  return { ok: true, leadId: lead.id, triage, draft } as const;
+}
+
+// External webhook ingestion (no cookie/dev headers) secured by WEBHOOK_SECRET.
+routes.post(
+  '/webhooks/ingest/message',
+  asyncHandler(async (req, res) => {
+    const expected = process.env.WEBHOOK_SECRET;
+    const provided = req.header('x-webhook-secret') ?? '';
+    const requireSecret = process.env.NODE_ENV === 'production';
+
+    if ((requireSecret || expected) && (!expected || provided !== expected)) {
+      throw new HttpError(401, 'Unauthorized');
+    }
+
+    const webhookSchema = z
+      .object({ tenantId: z.string().min(1) })
+      .merge(ingestMessageBodySchema)
+      .refine((v) => Boolean(v.customerMessage ?? v.text), {
+        path: ['customerMessage'],
+        message: 'Required'
+      });
+
+    const body = webhookSchema.parse(req.body);
+    const { tenantId, ...rest } = body;
+
+    const ingestBody = ingestMessageSchema.parse(rest);
+    const out = await handleIngestMessage({ tenantId, body: ingestBody });
+    res.json(out);
   })
 );
 
@@ -770,163 +1399,8 @@ routes.post(
   '/ingest/message',
   asyncHandler(async (req, res) => {
     const tenantId = getTenantId(req);
-    const body = z
-      .object({
-        botId: z.string().optional(),
-        channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
-        externalId: z.string().optional(),
-        fullName: z.string().optional(),
-        phone: z.string().optional(),
-        email: z.string().optional(),
-        customerMessage: z.string().min(1).optional(),
-        text: z.string().min(1).optional()
-      })
-      .refine((v) => Boolean(v.customerMessage ?? v.text), {
-        path: ['customerMessage'],
-        message: 'Required'
-      })
-      .parse(req.body);
-
-    const customerMessage = body.customerMessage ?? body.text;
-    if (!customerMessage) throw new Error('customerMessage is required');
-
-    const bot = body.botId
-      ? await prisma.bot.findFirst({ where: { id: body.botId, tenantId, isActive: true } })
-      : null;
-
-    // Try to find an existing lead (by channel+externalId, else phone/email).
-    const lead = await (async () => {
-      if (body.externalId) {
-        const found = await prisma.lead.findFirst({
-          where: { tenantId, channel: body.channel, externalId: body.externalId }
-        });
-        if (found) return found;
-      }
-
-      if (body.phone) {
-        const found = await prisma.lead.findFirst({ where: { tenantId, phone: body.phone } });
-        if (found) return found;
-      }
-
-      if (body.email) {
-        const found = await prisma.lead.findFirst({ where: { tenantId, email: body.email } });
-        if (found) return found;
-      }
-
-      return prisma.lead.create({
-        data: {
-          tenantId,
-          channel: body.channel,
-          externalId: body.externalId,
-          fullName: body.fullName,
-          phone: body.phone,
-          email: body.email,
-          language: 'en'
-        }
-      });
-    })();
-
-    await prisma.message.create({
-      data: {
-        tenantId,
-        leadId: lead.id,
-        direction: 'IN',
-        channel: body.channel,
-        body: customerMessage,
-        raw: { botId: bot?.id ?? null }
-      }
-    });
-
-    const ai = await createAiGatewayForTenant(prisma, tenantId);
-
-    // AI triage updates language + heat.
-    const triage = await ai.triage({
-      leadId: lead.id,
-      channel: lead.channel,
-      customerMessage
-    });
-
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { language: triage.language, heat: triage.heat }
-    });
-
-    await prisma.leadEvent.create({
-      data: {
-        tenantId,
-        leadId: lead.id,
-        type: 'AI_TRIAGE',
-        payload: triage
-      }
-    });
-
-    const pricingAllowed = bot?.pricingMode === 'STANDARD';
-    const draft = await ai.draftReply({
-      leadId: lead.id,
-      channel: lead.channel,
-      customerMessage,
-      pricingAllowed
-    });
-
-    await prisma.leadEvent.create({
-      data: {
-        tenantId,
-        leadId: lead.id,
-        type: 'AI_DRAFT_REPLY',
-        payload: { ...draft, botId: bot?.id ?? null }
-      }
-    });
-
-    if (draft.shouldEscalate) {
-      const existing = await prisma.triageQueueItem.findFirst({
-        where: { tenantId, leadId: lead.id, status: 'OPEN' }
-      });
-
-      if (!existing) {
-        await prisma.triageQueueItem.create({
-          data: {
-            tenantId,
-            leadId: lead.id,
-            reason: draft.escalationReason ?? 'AI_ESCALATION',
-            suggestedSalesmanId: null
-          }
-        });
-      }
-    } else {
-      // Auto-assign if unassigned.
-      const current = await prisma.lead.findFirst({
-        where: { id: lead.id, tenantId },
-        select: { assignedToSalesmanId: true }
-      });
-
-      if (!current?.assignedToSalesmanId) {
-        const picked = await pickSalesmanRoundRobin(prisma, tenantId, lead.id);
-        if (picked) {
-          await prisma.lead.update({ where: { id: lead.id }, data: { assignedToSalesmanId: picked.id } });
-          await prisma.leadEvent.create({
-            data: {
-              tenantId,
-              leadId: lead.id,
-              type: 'AUTO_ASSIGNED',
-              payload: { salesmanId: picked.id, mode: 'WEIGHTED' }
-            }
-          });
-        }
-      }
-
-      // Persist the assistant reply as an OUT message (simulation).
-      await prisma.message.create({
-        data: {
-          tenantId,
-          leadId: lead.id,
-          direction: 'OUT',
-          channel: body.channel,
-          body: draft.message,
-          raw: { botId: bot?.id ?? null, simulated: true }
-        }
-      });
-    }
-
-    res.json({ ok: true, leadId: lead.id, triage, draft });
+    const body = ingestMessageSchema.parse(req.body);
+    const out = await handleIngestMessage({ tenantId, body });
+    res.json(out);
   })
 );

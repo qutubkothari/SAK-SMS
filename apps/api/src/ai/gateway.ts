@@ -1,10 +1,12 @@
 import type { LeadChannel } from '@prisma/client'
 import type { AiProvider, ReplyDraft, TriageResult } from './types.js'
 import { createOpenAiTriageAndReply, type OpenAiProviderConfig } from './providers/openai.js'
+import { createGeminiTriageAndReply, type GeminiProviderConfig } from './providers/gemini.js'
 
 export type AiGatewayConfig = {
   provider: AiProvider
   openai?: OpenAiProviderConfig
+  gemini?: GeminiProviderConfig
 }
 
 export type TriageInput = {
@@ -114,15 +116,46 @@ function createOpenAiGateway(config: AiGatewayConfig): AiGateway {
   }
 }
 
+function createGeminiGateway(config: AiGatewayConfig): AiGateway {
+  const mock = createMockGateway()
+  const gemini = createGeminiTriageAndReply(config.gemini ?? { apiKey: process.env.GEMINI_API_KEY })
+
+  return {
+    async triage(input) {
+      try {
+        return await gemini.triage({
+          leadId: input.leadId,
+          channel: input.channel,
+          customerMessage: input.customerMessage
+        })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('GEMINI triage failed; falling back to MOCK:', err instanceof Error ? err.message : err)
+        return mock.triage(input)
+      }
+    },
+    async draftReply(input) {
+      try {
+        return await gemini.draftReply({
+          leadId: input.leadId,
+          channel: input.channel,
+          customerMessage: input.customerMessage,
+          pricingAllowed: input.pricingAllowed,
+          knowledgeSnippets: input.knowledgeSnippets
+        })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('GEMINI draftReply failed; falling back to MOCK:', err instanceof Error ? err.message : err)
+        return mock.draftReply(input)
+      }
+    }
+  }
+}
+
 // Safe default: deterministic mock logic until real provider + eval gates are added.
 export function createAiGateway(config: AiGatewayConfig): AiGateway {
   if (config.provider === 'OPENAI') return createOpenAiGateway(config)
-  if (config.provider === 'GEMINI') {
-    // TODO: Implement Gemini provider.
-    // eslint-disable-next-line no-console
-    console.warn('GEMINI provider not implemented; using MOCK')
-    return createMockGateway()
-  }
+  if (config.provider === 'GEMINI') return createGeminiGateway(config)
 
   return createMockGateway()
 }

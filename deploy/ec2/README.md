@@ -13,6 +13,7 @@ For manual deploys from your machine, keep your SSH private key **outside** the 
    - `sudo REPO_URL=https://github.com/qutubkothari/SAK-SMS.git BRANCH=main bash deploy/ec2/bootstrap.sh`
 3. Create `apps/api/.env` on the server (at `$APP_DIR/apps/api/.env`).
    - Must include `DATABASE_URL=...`
+   - Must include `AUTH_JWT_SECRET=...` (required for production login)
    - Optional: `AI_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL`
 4. Ensure security group allows inbound TCP:
    - `80` (web)
@@ -23,7 +24,7 @@ For manual deploys from your machine, keep your SSH private key **outside** the 
 Start the auto-deploy watcher that commits + pushes to GitHub and deploys to EC2 on every file change:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File deploy/ec2/auto-deploy.ps1 -Server 13.200.36.74 -User ubuntu -KeyPath "C:\path\to\your-key.pem" -RepoUrl "https://github.com/qutubkothari/SAK-SMS.git" -Branch main
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/ec2/auto-deploy-v2.ps1 -Server <EC2_IP> -User ubuntu -KeyPath "C:\path\to\your-key.pem" -RepoUrl "https://github.com/<owner>/<repo>.git" -Branch <branch>
 ```
 
 The watcher:
@@ -37,13 +38,13 @@ The watcher:
 1. Push your changes to GitHub (manual, separate step):
    - `powershell -NoProfile -ExecutionPolicy Bypass -File deploy/ec2/push-to-github.ps1 -Message "your message"`
 2. Deploy the latest pushed code to EC2 (manual, separate step):
-   - `powershell -NoProfile -ExecutionPolicy Bypass -File deploy/ec2/deploy-from-local.ps1 -Server 13.200.36.74 -User ubuntu -KeyPath "C:\path\to\your-key.pem" -RepoUrl "https://github.com/qutubkothari/SAK-SMS.git" -Branch main`
+   - `powershell -NoProfile -ExecutionPolicy Bypass -File deploy/ec2/deploy-from-local.ps1 -Server <EC2_IP> -User ubuntu -KeyPath "C:\path\to\your-key.pem" -RepoUrl "https://github.com/<owner>/<repo>.git" -Branch <branch>`
 
 Notes:
 - `deploy-from-local.ps1` uploads the deploy scripts and then runs `deploy/ec2/remote-deploy.sh` on the server.
 - The server deploy pulls from GitHub (`git reset --hard origin/<branch>`), so deploy the commit you want first.
 
 ## URLs
-- Web: `http://13.200.36.74/`
-- API (proxied): `http://13.200.36.74/api/health`
+- Web: `http://<EC2_IP>/`
+- API (proxied): `http://<EC2_IP>/api/health`
 

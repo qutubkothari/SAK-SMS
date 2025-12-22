@@ -1,5 +1,14 @@
 import type { NextFunction, Request, Response } from 'express';
 
+export class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>
 ) {
@@ -10,5 +19,6 @@ export function asyncHandler(
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   const message = err instanceof Error ? err.message : 'Unknown error';
-  res.status(400).json({ error: message });
+  const status = err instanceof HttpError ? err.status : 400;
+  res.status(status).json({ error: message });
 }

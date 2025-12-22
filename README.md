@@ -26,8 +26,9 @@ Monorepo with:
 
 ## Demo data
 - Open http://localhost:5173/
-- Use **Bootstrap tenant** to create a tenant + manager
-- Use **Seed demo data** to create 5 salesmen + sample leads + triage items
+- By default (dev), the web runs in **dev header auth** mode and shows **Dev setup**:
+   - Use **Bootstrap tenant** to create a tenant + manager
+   - Use **Seed demo data** to create 5 salesmen + sample leads + triage items
 
 ## AI provider
 - Default is `MOCK`.
@@ -36,5 +37,16 @@ Monorepo with:
    - `OPENAI_API_KEY=...`
    - Optional: `OPENAI_MODEL=gpt-4o-mini`
 
+- To enable Gemini for triage + draft replies, set in `apps/api/.env`:
+   - `AI_PROVIDER=GEMINI`
+   - `GEMINI_API_KEY=...`
+   - Optional: `GEMINI_MODEL=gemini-1.5-flash`
+
 ## Notes
-- Multi-tenant is enforced via `x-tenant-id` request header for now (dev mode). This will be upgraded to tenant-scoped JWT.
+- Production auth is tenant-scoped JWT stored in an HttpOnly cookie.
+   - Set `AUTH_JWT_SECRET` in `apps/api/.env` (required in production).
+   - Web uses `/login` (tenantId + email + password).
+- Dev header auth (local only):
+   - Set `AUTH_ALLOW_DEV_HEADERS=true` on the API (or `AUTH_MODE=DEV_HEADERS`).
+   - Set `VITE_AUTH_MODE=dev_headers` on the web.
+- Dev routes (`/dev/bootstrap`, `/dev/seed`) are disabled in production unless `ALLOW_DEV_ROUTES=true`.

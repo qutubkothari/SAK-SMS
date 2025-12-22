@@ -1,31 +1,49 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
+  authMode,
   assignLead,
   assignTriageItem,
+  closeTriageItem,
   createBot,
   createSuccessDefinition,
   devBootstrap,
   devSeed,
+  getUnreadNotificationCount,
+  getSuccessAnalytics,
   getAiConfig,
   getLead,
   ingestMessage,
+  listNotifications,
+  loadTenantId,
   listLeads,
   listBots,
   listSalesmen,
   listSuccessDefinitions,
   listTriage,
+  login,
   loadDevAuth,
+  logout,
+  markAllNotificationsRead,
+  markNotificationRead,
+  me,
   recomputeScores,
   recordLeadSuccess,
   saveDevAuth,
+  saveTenantId,
+  reopenTriageItem,
+  type Notification,
+  type TriageStatusFilter,
+  type SessionUser,
   updateAiConfig,
   updateBot,
   updateSalesman,
   updateSuccessDefinition,
   updateLeadStatus
 } from './lib/api'
+
+type SessionState = { loading: boolean; user: SessionUser | null }
 
 type Toast = { kind: 'error' | 'info'; message: string }
 
@@ -77,11 +95,47 @@ function useToast() {
   return { toast, setToast }
 }
 
-function TopBar() {
+function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: () => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [auth, setAuth] = useState(loadDevAuth())
   const isArabic = i18n.language === 'ar'
+  const mode = authMode()
+
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState<number>(0)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+
+  async function refreshUnreadCount() {
+    try {
+      const out = await getUnreadNotificationCount()
+      setUnreadCount(out.count)
+    } catch {
+      setUnreadCount(0)
+    }
+  }
+
+  async function refreshNotifications() {
+    try {
+      const out = await listNotifications({ limit: 20 })
+      setNotifications(out.notifications)
+    } catch {
+      setNotifications([])
+    }
+  }
+
+  useEffect(() => {
+    if (mode === 'dev_headers' || session.user) {
+      refreshUnreadCount().catch(() => undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, session.user?.id])
+
+  useEffect(() => {
+    if (!notificationsOpen) return
+    refreshNotifications().catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationsOpen])
 
   useEffect(() => {
     document.documentElement.lang = i18n.language
@@ -93,13 +147,19 @@ function TopBar() {
       <div className="sak-topbar__inner">
         <div className="sak-topbar__nav">
           <strong className="sak-topbar__title">{t('appTitle')}</strong>
-          <Link to="/">{t('leads')}</Link>
-          <Link to="/triage">{t('triage')}</Link>
-          <Link to="/salesmen">Salesmen</Link>
-          <Link to="/success">Success</Link>
-          <Link to="/ai">AI</Link>
-          <Link to="/bots">Bots</Link>
-          <Link to="/ingest">Ingest</Link>
+          {mode === 'dev_headers' || session.user ? (
+            <>
+              <Link to="/">{t('leads')}</Link>
+              <Link to="/triage">{t('triage')}</Link>
+              <Link to="/salesmen">Salesmen</Link>
+              <Link to="/success">Success</Link>
+              <Link to="/ai">AI</Link>
+              <Link to="/bots">Bots</Link>
+              <Link to="/ingest">Ingest</Link>
+            </>
+          ) : (
+            <Link to="/login">Login</Link>
+          )}
         </div>
 
         <div className="sak-topbar__spacer" />
@@ -112,35 +172,194 @@ function TopBar() {
               <option value="ar">AR</option>
             </select>
           </label>
-          <label className="sak-topbar__field">
-            <span className="sak-topbar__label">{t('tenantId')}</span>
-            <input value={auth.tenantId} onChange={(e) => setAuth({ ...auth, tenantId: e.target.value })} style={{ width: 220 }} />
-          </label>
-          <label className="sak-topbar__field">
-            <span className="sak-topbar__label">{t('userId')}</span>
-            <input value={auth.userId} onChange={(e) => setAuth({ ...auth, userId: e.target.value })} style={{ width: 220 }} />
-          </label>
-          <label className="sak-topbar__field">
-            <span className="sak-topbar__label">{t('role')}</span>
-            <select value={auth.role} onChange={(e) => setAuth({ ...auth, role: e.target.value as any })}>
-              <option value="MANAGER">MANAGER</option>
-              <option value="SALESMAN">SALESMAN</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="OWNER">OWNER</option>
-            </select>
-          </label>
-          <button
-            onClick={() => {
-              saveDevAuth(auth)
-              navigate(0)
-            }}
-          >
-            {t('save')}
-          </button>
+
+          {mode === 'dev_headers' || session.user ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setNotificationsOpen((v) => !v)}
+                style={{ padding: '10px 12px' }}
+              >
+                {t('notifications')}
+                {unreadCount > 0 ? ` (${unreadCount})` : ''}
+              </button>
+              {notificationsOpen ? (
+                <div
+                  className="sak-card"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 'calc(100% + 8px)',
+                    width: 360,
+                    maxWidth: '80vw',
+                    padding: 10
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <strong style={{ flex: 1 }}>{t('notifications')}</strong>
+                    <button
+                      onClick={async () => {
+                        await markAllNotificationsRead().catch(() => undefined)
+                        await refreshNotifications().catch(() => undefined)
+                        await refreshUnreadCount().catch(() => undefined)
+                      }}
+                    >
+                      {t('markAllRead')}
+                    </button>
+                  </div>
+
+                  {notifications.length === 0 ? (
+                    <div className="muted" style={{ padding: 8 }}>
+                      {t('noNotifications')}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {notifications.map((n) => {
+                        const isUnread = !n.readAt
+                        return (
+                          <div
+                            key={n.id}
+                            className="sak-card"
+                            style={{ padding: 10 }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 900 }}>
+                                  {isUnread ? '• ' : ''}
+                                  {n.title}
+                                </div>
+                                {n.body ? <div className="muted">{n.body}</div> : null}
+                                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                  {new Date(n.createdAt).toLocaleString()}
+                                </div>
+                              </div>
+                              {isUnread ? (
+                                <button
+                                  onClick={async () => {
+                                    await markNotificationRead(n.id).catch(() => undefined)
+                                    await refreshNotifications().catch(() => undefined)
+                                    await refreshUnreadCount().catch(() => undefined)
+                                  }}
+                                >
+                                  {t('markRead')}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {mode === 'dev_headers' ? (
+            <>
+              <label className="sak-topbar__field">
+                <span className="sak-topbar__label">{t('tenantId')}</span>
+                <input value={auth.tenantId} onChange={(e) => setAuth({ ...auth, tenantId: e.target.value })} style={{ width: 220 }} />
+              </label>
+              <label className="sak-topbar__field">
+                <span className="sak-topbar__label">{t('userId')}</span>
+                <input value={auth.userId} onChange={(e) => setAuth({ ...auth, userId: e.target.value })} style={{ width: 220 }} />
+              </label>
+              <label className="sak-topbar__field">
+                <span className="sak-topbar__label">{t('role')}</span>
+                <select value={auth.role} onChange={(e) => setAuth({ ...auth, role: e.target.value as any })}>
+                  <option value="MANAGER">MANAGER</option>
+                  <option value="SALESMAN">SALESMAN</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="OWNER">OWNER</option>
+                </select>
+              </label>
+              <button
+                onClick={() => {
+                  saveDevAuth(auth)
+                  navigate(0)
+                }}
+              >
+                {t('save')}
+              </button>
+            </>
+          ) : session.user ? (
+            <>
+              <Badge kind={'muted'} text={`TENANT ${session.user.tenantId}`} />
+              <Badge kind={'ok'} text={`${session.user.displayName} (${session.user.role})`} />
+              <button
+                onClick={async () => {
+                  await logout().catch(() => undefined)
+                  onLoggedOut()
+                  navigate('/login')
+                }}
+              >
+                Logout
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
   )
+}
+
+function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLoggedIn: (u: SessionUser) => void }) {
+  const navigate = useNavigate()
+  const [tenantId, setTenantId] = useState(loadTenantId())
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+
+  return (
+    <div style={{ padding: 12 }}>
+      <div className="sak-card" style={{ padding: 12, maxWidth: 520 }}>
+        <h2 style={{ marginTop: 0 }}>Login</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            Tenant ID
+            <input
+              value={tenantId}
+              onChange={(e) => {
+                setTenantId(e.target.value)
+                saveTenantId(e.target.value)
+              }}
+              placeholder="tenantId"
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            Email
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@company.com" />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+          </label>
+          <button
+            onClick={async () => {
+              try {
+                const out = await login({ tenantId, email, password })
+                onLoggedIn(out.user)
+                navigate('/')
+              } catch (e) {
+                onError(e instanceof Error ? e.message : 'Login failed')
+              }
+            }}
+          >
+            Login
+          </button>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+          If you don’t know your Tenant ID, ask your admin.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RequireAuth({ session, children }: { session: SessionState; children: ReactElement }) {
+  if (authMode() === 'dev_headers') return children
+  if (session.loading) return <div style={{ padding: 12 }}>Loading…</div>
+  if (!session.user) return <Navigate to="/login" replace />
+  return children
 }
 
 function AiPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
@@ -581,7 +800,7 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
   )
 }
 
-function LeadDetailPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
+function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => void; onInfo: (m: string) => void; role: string | null }) {
   const { t } = useTranslation()
   const params = useParams()
   const leadId = params.id ?? ''
@@ -590,7 +809,10 @@ function LeadDetailPage({ onError, onInfo }: { onError: (m: string) => void; onI
   const [successDefs, setSuccessDefs] = useState<any[]>([])
   const [selectedSuccessDefId, setSelectedSuccessDefId] = useState<string>('')
   const [successNote, setSuccessNote] = useState<string>('')
-  const canAssign = useMemo(() => loadDevAuth().role !== 'SALESMAN', [])
+  const canAssign = useMemo(() => {
+    if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
+    return role !== 'SALESMAN'
+  }, [role])
 
   async function refresh() {
     try {
@@ -807,10 +1029,12 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
   const { t } = useTranslation()
   const [items, setItems] = useState<any[]>([])
   const [salesmen, setSalesmen] = useState<any[]>([])
+  const [status, setStatus] = useState<TriageStatusFilter>('OPEN')
+  const [closeNoteById, setCloseNoteById] = useState<Record<string, string>>({})
 
   async function refresh() {
     try {
-      const [triage, sm] = await Promise.all([listTriage(), listSalesmen()])
+      const [triage, sm] = await Promise.all([listTriage(status), listSalesmen()])
       setItems(triage.items)
       setSalesmen(sm.salesmen)
     } catch (e) {
@@ -821,7 +1045,7 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [status])
 
   return (
     <div style={{ padding: 12 }}>
@@ -829,6 +1053,15 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <h2 style={{ margin: 0 }}>{t('openTriage')}</h2>
           <button onClick={refresh}>{t('refresh')}</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value as TriageStatusFilter)}>
+              <option value="OPEN">OPEN</option>
+              <option value="ASSIGNED">ASSIGNED</option>
+              <option value="CLOSED">CLOSED</option>
+              <option value="ALL">ALL</option>
+            </select>
+          </div>
         </div>
       </div>
       <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse' }}>
@@ -836,7 +1069,9 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
           <tr>
             <th align="left">{t('lead')}</th>
             <th align="left">{t('reason')}</th>
+            <th align="left">Status</th>
             <th align="left">{t('assign')}</th>
+            <th align="left">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -849,27 +1084,81 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
                 <Badge kind={triageReasonKind(it.reason)} text={it.reason} />
               </td>
               <td>
-                <select
-                  defaultValue={it.suggestedSalesmanId ?? ''}
-                  onChange={async (e) => {
-                    try {
-                      await assignTriageItem(it.id, e.target.value)
-                      onInfo('Triage assigned')
-                      await refresh()
-                    } catch (err) {
-                      onError(err instanceof Error ? err.message : 'Failed')
-                    }
-                  }}
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
-                  {salesmen.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.displayName}
+                <Badge
+                  kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : it.status === 'ASSIGNED' ? 'muted' : 'muted'}
+                  text={it.status}
+                />
+              </td>
+              <td>
+                {it.status === 'CLOSED' ? (
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>—</span>
+                ) : (
+                  <select
+                    defaultValue={it.suggestedSalesmanId ?? ''}
+                    onChange={async (e) => {
+                      try {
+                        await assignTriageItem(it.id, e.target.value)
+                        onInfo('Triage assigned')
+                        await refresh()
+                      } catch (err) {
+                        onError(err instanceof Error ? err.message : 'Failed')
+                      }
+                    }}
+                  >
+                    <option value="" disabled>
+                      Select…
                     </option>
-                  ))}
-                </select>
+                    {salesmen.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.displayName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </td>
+              <td>
+                {it.status === 'CLOSED' ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await reopenTriageItem(it.id)
+                        onInfo('Reopened')
+                        await refresh()
+                      } catch (err) {
+                        onError(err instanceof Error ? err.message : 'Failed')
+                      }
+                    }}
+                  >
+                    Reopen
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      value={closeNoteById[it.id] ?? ''}
+                      onChange={(e) => setCloseNoteById((p) => ({ ...p, [it.id]: e.target.value }))}
+                      placeholder="Close note (optional)"
+                      style={{ width: 220 }}
+                    />
+                    <button
+                      onClick={async () => {
+                        try {
+                          await closeTriageItem(it.id, { note: closeNoteById[it.id] || undefined })
+                          setCloseNoteById((p) => {
+                            const next = { ...p }
+                            delete next[it.id]
+                            return next
+                          })
+                          onInfo('Closed')
+                          await refresh()
+                        } catch (err) {
+                          onError(err instanceof Error ? err.message : 'Failed')
+                        }
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}
@@ -1001,11 +1290,13 @@ function SuccessPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
   const [name, setName] = useState('Demo booked')
   const [type, setType] = useState<'DEMO_BOOKED' | 'PAYMENT_RECEIVED' | 'ORDER_RECEIVED' | 'CONTRACT_SIGNED' | 'CUSTOM'>('DEMO_BOOKED')
   const [weight, setWeight] = useState(20)
+  const [analytics, setAnalytics] = useState<any | null>(null)
 
   async function refresh() {
     try {
-      const out = await listSuccessDefinitions()
+      const [out, a] = await Promise.all([listSuccessDefinitions(), getSuccessAnalytics(30)])
       setDefs(out.definitions)
+      setAnalytics(a)
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Failed')
     }
@@ -1018,6 +1309,75 @@ function SuccessPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
 
   return (
     <div style={{ padding: 12 }}>
+      {analytics ? (
+        <div className="sak-card" style={{ padding: 12, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0 }}>Analytics</h2>
+            <Badge kind={'muted'} text={`LAST ${analytics.days} DAYS`} />
+          </div>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {(analytics.eventsByType ?? []).map((x: any) => (
+              <div key={x.type} className="sak-card" style={{ padding: 10, borderRadius: 12 }}>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{x.type}</div>
+                <div style={{ fontWeight: 700 }}>{x.count}</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>weight {x.weight}</div>
+              </div>
+            ))}
+            {(analytics.eventsByType ?? []).length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No success events in this window.</div>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Leads by status</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                {(analytics.leadStatusCounts ?? []).map((x: any) => (
+                  <Badge key={x.status} kind={'muted'} text={`${x.status} ${x.count}`} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Leads by heat</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                {(analytics.leadHeatCounts ?? []).map((x: any) => (
+                  <Badge key={x.heat} kind={'muted'} text={`${x.heat} ${x.count}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Top salesmen (by success weight)</div>
+            {(analytics.leaderboard ?? []).length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No salesman events yet.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th align="left">Salesman</th>
+                    <th align="left">Events</th>
+                    <th align="left">Weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(analytics.leaderboard ?? []).map((r: any) => (
+                    <tr key={r.salesmanId}>
+                      <td style={{ padding: '6px 0' }}>{r.displayName}</td>
+                      <td>{r.events}</td>
+                      <td>
+                        <Badge kind={weightKind(Number(r.weight ?? 0))} text={String(Number(r.weight ?? 0))} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div className="sak-card" style={{ padding: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0 }}>Success definitions</h2>
@@ -1152,12 +1512,38 @@ function App() {
   const onError = (m: string) => setToast({ kind: 'error', message: m })
   const onInfo = (m: string) => setToast({ kind: 'info', message: m })
 
+  const [session, setSession] = useState<SessionState>({ loading: authMode() !== 'dev_headers', user: null })
+
+  useEffect(() => {
+    if (authMode() === 'dev_headers') {
+      setSession({ loading: false, user: null })
+      return
+    }
+    let cancelled = false
+    setSession((s) => ({ ...s, loading: true }))
+    me()
+      .then((out) => {
+        if (!cancelled) setSession({ loading: false, user: out.user })
+      })
+      .catch(() => {
+        if (!cancelled) setSession({ loading: false, user: null })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <>
-      <TopBar />
+      <TopBar
+        session={session}
+        onLoggedOut={() => {
+          setSession({ loading: false, user: null })
+        }}
+      />
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
         <div style={{ padding: 12 }}>
-          <DevSetup onInfo={onInfo} onError={onError} />
+          {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
           {toast ? (
             <div
               className="sak-card"
@@ -1171,14 +1557,86 @@ function App() {
           ) : null}
         </div>
         <Routes>
-          <Route path="/" element={<LeadsPage onError={onError} />} />
-          <Route path="/triage" element={<TriagePage onError={onError} onInfo={onInfo} />} />
-          <Route path="/salesmen" element={<SalesmenPage onError={onError} onInfo={onInfo} />} />
-          <Route path="/success" element={<SuccessPage onError={onError} onInfo={onInfo} />} />
-          <Route path="/ai" element={<AiPage onError={onError} onInfo={onInfo} />} />
-          <Route path="/leads/:id" element={<LeadDetailPage onError={onError} onInfo={onInfo} />} />
-          <Route path="/bots" element={<BotsPage onError={onError} onInfo={onInfo} />} />
-          <Route path="/ingest" element={<IngestPage onError={onError} onInfo={onInfo} />} />
+          <Route
+            path="/login"
+            element={
+              authMode() === 'dev_headers' ? (
+                <Navigate to="/" replace />
+              ) : (
+                <LoginPage
+                  onError={onError}
+                  onLoggedIn={(u) => {
+                    setSession({ loading: false, user: u })
+                  }}
+                />
+              )
+            }
+          />
+
+          <Route
+            path="/"
+            element={
+              <RequireAuth session={session}>
+                <LeadsPage onError={onError} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/triage"
+            element={
+              <RequireAuth session={session}>
+                <TriagePage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/salesmen"
+            element={
+              <RequireAuth session={session}>
+                <SalesmenPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/success"
+            element={
+              <RequireAuth session={session}>
+                <SuccessPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/ai"
+            element={
+              <RequireAuth session={session}>
+                <AiPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/leads/:id"
+            element={
+              <RequireAuth session={session}>
+                <LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/bots"
+            element={
+              <RequireAuth session={session}>
+                <BotsPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/ingest"
+            element={
+              <RequireAuth session={session}>
+                <IngestPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
         </Routes>
       </div>
     </>
