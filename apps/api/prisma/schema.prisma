@@ -63,6 +63,21 @@ enum AssignmentStrategy {
   CUSTOM
 }
 
+enum CallOutcome {
+  ANSWERED
+  NO_ANSWER
+  BUSY
+  VOICEMAIL
+  WRONG_NUMBER
+  CALLBACK_REQUESTED
+  OTHER
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String
@@ -200,6 +215,7 @@ model Lead {
   triageItems  TriageQueueItem[]
   successEvents SuccessEvent[]
   notes        Note[]
+  calls        Call[]
 
   @@index([tenantId])
   @@index([tenantId, channel])
@@ -338,4 +354,26 @@ model AssignmentConfig {
   tenant          Tenant             @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+model Call {
+  id          String        @id @default(cuid())
+  tenantId    String
+  leadId      String
+  userId      String
+  direction   CallDirection
+  outcome     CallOutcome
+  duration    Int?          // Duration in seconds
+  notes       String?
+  recordingUrl String?
+  scheduledFor DateTime?    // For scheduled callbacks
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  lead        Lead          @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, leadId])
+  @@index([tenantId, userId])
+  @@index([leadId, createdAt])
 }

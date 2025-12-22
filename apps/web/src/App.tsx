@@ -20,6 +20,8 @@ import {
   getLead,
   getLeadNotes,
   addLeadNote,
+  getLeadCalls,
+  logCall,
   listMessageTemplates,
   sendLeadMessage,
   importLeadsCsv,
@@ -1244,6 +1246,13 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [messageChannel, setMessageChannel] = useState<string>('WHATSAPP')
   const [messageContent, setMessageContent] = useState<string>('')
   const [templates, setTemplates] = useState<any[]>([])
+  const [showCallModal, setShowCallModal] = useState<boolean>(false)
+  const [callDirection, setCallDirection] = useState<string>('OUTBOUND')
+  const [callOutcome, setCallOutcome] = useState<string>('ANSWERED')
+  const [callDuration, setCallDuration] = useState<string>('')
+  const [callNotes, setCallNotes] = useState<string>('')
+  const [callRecordingUrl, setCallRecordingUrl] = useState<string>('')
+  const [calls, setCalls] = useState<any[]>([])
   const canAssign = useMemo(() => {
     if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
     return role !== 'SALESMAN'
@@ -1255,6 +1264,15 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
       setLead(out.lead)
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
+  async function refreshCalls() {
+    try {
+      const out = await getLeadCalls(leadId)
+      setCalls(out.calls)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to load calls')
     }
   }
 
@@ -1270,6 +1288,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   useEffect(() => {
     refresh()
     refreshNotes()
+    refreshCalls()
     ;(async () => {
       try {
         if (canAssign) {
@@ -1291,7 +1310,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId])
 
-  // Build timeline from messages, events, triage items, and success events
+  // Build timeline from messages, events, triage items, success events, and calls
   const timeline = useMemo(() => {
     if (!lead) return []
     const items: Array<{ time: Date; type: string; data: any }> = []
@@ -1312,8 +1331,12 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
       items.push({ time: new Date(s.createdAt), type: 'success', data: s })
     })
     
+    calls.forEach((c: any) => {
+      items.push({ time: new Date(c.createdAt), type: 'call', data: c })
+    })
+    
     return items.sort((a, b) => b.time.getTime() - a.time.getTime())
-  }, [lead])
+  }, [lead, calls])
 
   if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
 
@@ -1406,6 +1429,118 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
         </div>
       )}
 
+      {/* Call Modal */}
+      {showCallModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="sak-card" style={{
+            maxWidth: 600,
+            width: '90%',
+            padding: 24,
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>Log Call</h3>
+              <button onClick={() => setShowCallModal(false)}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Direction</label>
+              <select value={callDirection} onChange={(e) => setCallDirection(e.target.value)}>
+                <option value="OUTBOUND">Outbound (You called them)</option>
+                <option value="INBOUND">Inbound (They called you)</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Outcome</label>
+              <select value={callOutcome} onChange={(e) => setCallOutcome(e.target.value)}>
+                <option value="ANSWERED">Answered</option>
+                <option value="NO_ANSWER">No Answer</option>
+                <option value="BUSY">Busy</option>
+                <option value="VOICEMAIL">Voicemail</option>
+                <option value="DISCONNECTED">Disconnected</option>
+                <option value="WRONG_NUMBER">Wrong Number</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Duration (seconds)</label>
+              <input
+                type="number"
+                value={callDuration}
+                onChange={(e) => setCallDuration(e.target.value)}
+                placeholder="Optional"
+                min="0"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Notes</label>
+              <textarea
+                value={callNotes}
+                onChange={(e) => setCallNotes(e.target.value)}
+                rows={4}
+                style={{ width: '100%' }}
+                placeholder="Optional call notes..."
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Recording URL</label>
+              <input
+                type="url"
+                value={callRecordingUrl}
+                onChange={(e) => setCallRecordingUrl(e.target.value)}
+                placeholder="Optional recording URL"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowCallModal(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={async () => {
+                  try {
+                    await logCall(leadId, {
+                      direction: callDirection as any,
+                      outcome: callOutcome as any,
+                      duration: callDuration ? parseInt(callDuration) : undefined,
+                      notes: callNotes || undefined,
+                      recordingUrl: callRecordingUrl || undefined
+                    })
+                    setCallDirection('OUTBOUND')
+                    setCallOutcome('ANSWERED')
+                    setCallDuration('')
+                    setCallNotes('')
+                    setCallRecordingUrl('')
+                    setShowCallModal(false)
+                    onInfo('Call logged')
+                    await refreshCalls()
+                  } catch (e) {
+                    onError(e instanceof Error ? e.message : 'Failed to log call')
+                  }
+                }}
+              >
+                Save Call
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div style={{ padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
@@ -1484,6 +1619,14 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             style={{ fontSize: 14 }}
           >
             📨 Send Message
+          </button>
+
+          <button
+            className="primary"
+            onClick={() => setShowCallModal(true)}
+            style={{ fontSize: 14 }}
+          >
+            📞 Log Call
           </button>
 
           <label>
@@ -1602,6 +1745,33 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>Salesman: {item.data.salesmanId}</div>
                       ) : null}
                       {item.data.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{item.data.note}</div> : null}
+                    </div>
+                  ) : item.type === 'call' ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 16 }}>📞</span>
+                        <Badge
+                          kind={
+                            item.data.outcome === 'ANSWERED' ? 'ok' : 
+                            item.data.outcome === 'NO_ANSWER' || item.data.outcome === 'BUSY' ? 'warn' : 
+                            'danger'
+                          }
+                          text={item.data.outcome.replace('_', ' ')}
+                        />
+                        {item.data.duration && (
+                          <span style={{ fontSize: 13, opacity: 0.7 }}>
+                            {Math.floor(item.data.duration / 60)}:{(item.data.duration % 60).toString().padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
+                      {item.data.notes && (
+                        <div style={{ marginTop: 4, opacity: 0.9, fontSize: 14 }}>{item.data.notes}</div>
+                      )}
+                      {item.data.recordingUrl && (
+                        <a href={item.data.recordingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, marginTop: 4, display: 'block' }}>
+                          🎧 Listen to recording
+                        </a>
+                      )}
                     </div>
                   ) : null}
                 </div>

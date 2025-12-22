@@ -1651,6 +1651,94 @@ routes.post(
   })
 );
 
+// Call Logging
+routes.get(
+  '/leads/:id/calls',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Salesmen can only view calls for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const calls = await prisma.call.findMany({
+      where: { leadId, tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ calls });
+  })
+);
+
+routes.post(
+  '/leads/:id/calls',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Salesmen can only log calls for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const input = z.object({
+      direction: z.enum(['INBOUND', 'OUTBOUND']),
+      outcome: z.enum(['NO_ANSWER', 'BUSY', 'ANSWERED', 'VOICEMAIL', 'DISCONNECTED', 'WRONG_NUMBER']),
+      duration: z.number().int().positive().optional(),
+      notes: z.string().optional(),
+      recordingUrl: z.string().url().optional()
+    }).parse(req.body);
+
+    const call = await prisma.call.create({
+      data: {
+        tenantId,
+        leadId,
+        userId,
+        direction: input.direction as any,
+        outcome: input.outcome as any,
+        duration: input.duration,
+        notes: input.notes,
+        recordingUrl: input.recordingUrl
+      }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId,
+        type: 'CALL_LOGGED',
+        payload: { callId: call.id, userId, outcome: input.outcome }
+      }
+    });
+
+    res.json({ 
+      ok: true, 
+      call: { 
+        id: call.id, 
+        outcome: call.outcome, 
+        duration: call.duration,
+        notes: call.notes,
+        recordingUrl: call.recordingUrl,
+        createdAt: call.createdAt.toISOString() 
+      } 
+    });
+  })
+);
+
 // Message Templates
 routes.get(
   '/message-templates',

@@ -311,6 +311,52 @@ export async function addLeadNote(leadId: string, content: string) {
   })
 }
 
+export type CallOutcome = 'NO_ANSWER' | 'BUSY' | 'ANSWERED' | 'VOICEMAIL' | 'DISCONNECTED' | 'WRONG_NUMBER'
+export type CallDirection = 'INBOUND' | 'OUTBOUND'
+
+export async function getLeadCalls(leadId: string) {
+  return request<{ 
+    calls: Array<{ 
+      id: string
+      direction: CallDirection
+      outcome: CallOutcome
+      duration: number | null
+      notes: string | null
+      recordingUrl: string | null
+      createdAt: string
+      updatedAt: string
+      userId: string
+    }> 
+  }>(`/leads/${leadId}/calls`)
+}
+
+export async function logCall(
+  leadId: string, 
+  payload: { 
+    direction: CallDirection
+    outcome: CallOutcome
+    duration?: number
+    notes?: string
+    recordingUrl?: string 
+  }
+) {
+  return request<{ 
+    ok: true
+    call: { 
+      id: string
+      direction: CallDirection
+      outcome: CallOutcome
+      duration: number | null
+      notes: string | null
+      recordingUrl: string | null
+      createdAt: string 
+    } 
+  }>(`/leads/${leadId}/calls`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function listMessageTemplates() {
   return request<{ templates: Array<{ id: string; name: string; content: string; channel: string; isActive: boolean }> }>('/message-templates')
 }
