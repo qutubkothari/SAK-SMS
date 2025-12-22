@@ -162,6 +162,7 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
               <Link to="/leads">{t('leads')}</Link>
               <Link to="/triage">{t('triage')}</Link>
               <Link to="/salesmen">Salesmen</Link>
+              <Link to="/reports">Reports</Link>
               <Link to="/success">Success</Link>
               <Link to="/settings">Settings</Link>
               <Link to="/ai">AI</Link>
@@ -2404,6 +2405,248 @@ function SettingsPage({ onError, onInfo }: { onError: (m: string) => void; onInf
   )
 }
 
+function ReportsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
+  const [timeRange, setTimeRange] = useState<number>(30)
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  async function refresh() {
+    try {
+      setLoading(true)
+      const { getTimeSeriesAnalytics, getSuccessAnalytics } = await import('./lib/api')
+      const [timeSeries, successData] = await Promise.all([
+        getTimeSeriesAnalytics(timeRange),
+        getSuccessAnalytics(timeRange)
+      ])
+      setData({ ...timeSeries, ...successData })
+      setLoading(false)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to load reports')
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRange])
+
+  async function handleExport(type: 'leads' | 'success' | 'salesmen') {
+    try {
+      const { exportAnalyticsReport } = await import('./lib/api')
+      await exportAnalyticsReport(type)
+      onInfo(`${type.charAt(0).toUpperCase() + type.slice(1)} report exported successfully`)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Export failed')
+    }
+  }
+
+  if (loading) return <div style={{ padding: 12 }}>Loading reports...</div>
+  if (!data) return <div style={{ padding: 12 }}>No data available</div>
+
+  // Calculate totals
+  const totalNewLeads = data.timeSeries?.reduce((sum: number, day: any) => sum + day.newLeads, 0) || 0
+  const totalMessagesIn = data.timeSeries?.reduce((sum: number, day: any) => sum + day.messagesIn, 0) || 0
+  const totalMessagesOut = data.timeSeries?.reduce((sum: number, day: any) => sum + day.messagesOut, 0) || 0
+  const totalSuccessEvents = data.timeSeries?.reduce((sum: number, day: any) => sum + day.successEvents, 0) || 0
+  const totalSuccessWeight = data.timeSeries?.reduce((sum: number, day: any) => sum + day.successWeight, 0) || 0
+
+  return (
+    <div style={{ padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>Reports & Analytics</h2>
+        <select value={timeRange} onChange={(e) => setTimeRange(Number(e.target.value))} style={{ padding: '6px 12px' }}>
+          <option value={7}>Last 7 Days</option>
+          <option value={30}>Last 30 Days</option>
+          <option value={60}>Last 60 Days</option>
+          <option value={90}>Last 90 Days</option>
+          <option value={180}>Last 6 Months</option>
+          <option value={365}>Last Year</option>
+        </select>
+        <button onClick={refresh}>Refresh</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={() => handleExport('leads')} className="button">
+            Export Leads
+          </button>
+          <button onClick={() => handleExport('success')} className="button">
+            Export Success
+          </button>
+          <button onClick={() => handleExport('salesmen')} className="button">
+            Export Salesmen
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{totalNewLeads}</div>
+          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>New Leads</div>
+        </div>
+        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#f59e0b' }}>{totalMessagesIn}</div>
+          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Messages Received</div>
+        </div>
+        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#8b5cf6' }}>{totalMessagesOut}</div>
+          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Messages Sent</div>
+        </div>
+        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#10b981' }}>{totalSuccessEvents}</div>
+          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Success Events</div>
+        </div>
+        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{totalSuccessWeight.toFixed(0)}</div>
+          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Success Weight</div>
+        </div>
+      </div>
+
+      {/* Time Series Chart */}
+      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Activity Over Time</h3>
+        {data.timeSeries && data.timeSeries.length > 0 ? (
+          <div style={{ overflow: 'auto' }}>
+            <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th align="left" style={{ padding: '8px 4px' }}>Date</th>
+                  <th align="right" style={{ padding: '8px 4px' }}>New Leads</th>
+                  <th align="right" style={{ padding: '8px 4px' }}>Msgs In</th>
+                  <th align="right" style={{ padding: '8px 4px' }}>Msgs Out</th>
+                  <th align="right" style={{ padding: '8px 4px' }}>Success</th>
+                  <th align="right" style={{ padding: '8px 4px' }}>Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.timeSeries.map((day: any) => (
+                  <tr key={day.date} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '8px 4px' }}>{day.date}</td>
+                    <td align="right" style={{ padding: '8px 4px' }}>
+                      <Badge kind={day.newLeads > 0 ? 'ok' : 'muted'} text={String(day.newLeads)} />
+                    </td>
+                    <td align="right" style={{ padding: '8px 4px' }}>
+                      <Badge kind={day.messagesIn > 0 ? 'warn' : 'muted'} text={String(day.messagesIn)} />
+                    </td>
+                    <td align="right" style={{ padding: '8px 4px' }}>
+                      <Badge kind={day.messagesOut > 0 ? 'ok' : 'muted'} text={String(day.messagesOut)} />
+                    </td>
+                    <td align="right" style={{ padding: '8px 4px' }}>
+                      <Badge kind={day.successEvents > 0 ? 'ok' : 'muted'} text={String(day.successEvents)} />
+                    </td>
+                    <td align="right" style={{ padding: '8px 4px' }}>
+                      <Badge kind={weightKind(day.successWeight)} text={String(day.successWeight.toFixed(0))} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ opacity: 0.8 }}>No activity data in this time range</div>
+        )}
+      </div>
+
+      {/* Channel Performance */}
+      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Channel Performance</h3>
+        {data.channelStats && data.channelStats.length > 0 ? (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                <th align="left" style={{ padding: '8px 4px' }}>Channel</th>
+                <th align="right" style={{ padding: '8px 4px' }}>Total Leads</th>
+                <th align="right" style={{ padding: '8px 4px' }}>Converted</th>
+                <th align="right" style={{ padding: '8px 4px' }}>Conversion Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.channelStats.map((ch: any) => (
+                <tr key={ch.channel} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px 4px', fontWeight: 600 }}>{ch.channel}</td>
+                  <td align="right" style={{ padding: '8px 4px' }}>{ch.total}</td>
+                  <td align="right" style={{ padding: '8px 4px' }}>
+                    <Badge kind={ch.converted > 0 ? 'ok' : 'muted'} text={String(ch.converted)} />
+                  </td>
+                  <td align="right" style={{ padding: '8px 4px' }}>
+                    <Badge
+                      kind={
+                        parseFloat(ch.conversionRate) >= 20
+                          ? 'ok'
+                          : parseFloat(ch.conversionRate) >= 10
+                          ? 'warn'
+                          : 'danger'
+                      }
+                      text={`${ch.conversionRate}%`}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ opacity: 0.8 }}>No channel data available</div>
+        )}
+      </div>
+
+      {/* Success Event Types */}
+      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Success Events by Type</h3>
+        {data.eventsByType && data.eventsByType.length > 0 ? (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {data.eventsByType.map((ev: any) => (
+              <div key={ev.type} className="sak-card" style={{ padding: 12, borderRadius: 12, minWidth: 200 }}>
+                <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{ev.type}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6', marginBottom: 4 }}>{ev.count}</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>Weight: {ev.weight}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ opacity: 0.8 }}>No success events in this time range</div>
+        )}
+      </div>
+
+      {/* Leaderboard */}
+      <div className="sak-card" style={{ padding: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Top Performers</h3>
+        {data.leaderboard && data.leaderboard.length > 0 ? (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                <th align="left" style={{ padding: '8px 4px' }}>Salesman</th>
+                <th align="right" style={{ padding: '8px 4px' }}>Events</th>
+                <th align="right" style={{ padding: '8px 4px' }}>Total Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.leaderboard.map((s: any, idx: number) => (
+                <tr key={s.salesmanId} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px 4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {idx < 3 && (
+                        <span style={{ fontSize: 18 }}>
+                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                        </span>
+                      )}
+                      <span style={{ fontWeight: 600 }}>{s.displayName}</span>
+                    </div>
+                  </td>
+                  <td align="right" style={{ padding: '8px 4px' }}>{s.events}</td>
+                  <td align="right" style={{ padding: '8px 4px' }}>
+                    <Badge kind={weightKind(s.weight)} text={String(s.weight.toFixed(0))} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ opacity: 0.8 }}>No performance data yet</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const { toast, setToast } = useToast()
   const onError = (m: string) => setToast({ kind: 'error', message: m })
@@ -2499,6 +2742,14 @@ function App() {
             element={
               <RequireAuth session={session}>
                 <SalesmenPage onError={onError} onInfo={onInfo} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <RequireAuth session={session}>
+                <ReportsPage onError={onError} onInfo={onInfo} />
               </RequireAuth>
             }
           />

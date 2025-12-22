@@ -706,6 +706,229 @@ routes.get(
   })
 );
 
+// Time-series analytics for reports
+routes.get(
+  '/analytics/time-series',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const days = z
+      .preprocess((v) => (v === undefined ? undefined : Number(v)), z.number().int().min(7).max(365).default(30))
+      .parse((req.query as any)?.days);
+
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Get all leads created in timeframe
+    const leads = await prisma.lead.findMany({
+      where: { tenantId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true, status: true, channel: true, heat: true }
+    });
+
+    // Get all success events in timeframe
+    const successEvents = await prisma.successEvent.findMany({
+      where: { tenantId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true, type: true, weight: true, salesmanId: true }
+    });
+
+    // Get messages in timeframe
+    const messages = await prisma.message.findMany({
+      where: { tenantId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true, direction: true, channel: true }
+    });
+
+    // Group by day
+    const dailyStats: Record<string, any> = {};
+    
+    // Process leads
+    for (const lead of leads) {
+      const dateKey = lead.createdAt.toISOString().split('T')[0];
+      if (!dailyStats[dateKey]) {
+        dailyStats[dateKey] = { date: dateKey, newLeads: 0, messagesIn: 0, messagesOut: 0, successEvents: 0, successWeight: 0 };
+      }
+      dailyStats[dateKey].newLeads++;
+    }
+
+    // Process messages
+    for (const msg of messages) {
+      const dateKey = msg.createdAt.toISOString().split('T')[0];
+      if (!dailyStats[dateKey]) {
+        dailyStats[dateKey] = { date: dateKey, newLeads: 0, messagesIn: 0, messagesOut: 0, successEvents: 0, successWeight: 0 };
+      }
+      if (msg.direction === 'IN') {
+        dailyStats[dateKey].messagesIn++;
+      } else {
+        dailyStats[dateKey].messagesOut++;
+      }
+    }
+
+    // Process success events
+    for (const ev of successEvents) {
+      const dateKey = ev.createdAt.toISOString().split('T')[0];
+      if (!dailyStats[dateKey]) {
+        dailyStats[dateKey] = { date: dateKey, newLeads: 0, messagesIn: 0, messagesOut: 0, successEvents: 0, successWeight: 0 };
+      }
+      dailyStats[dateKey].successEvents++;
+      dailyStats[dateKey].successWeight += ev.weight;
+    }
+
+    // Convert to array and sort
+    const timeSeries = Object.values(dailyStats).sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+    // Channel performance
+    const channelPerformance = await prisma.lead.groupBy({
+      by: ['channel'],
+      where: { tenantId },
+      _count: { _all: true }
+    });
+
+    const channelConversions = await prisma.lead.groupBy({
+      by: ['channel'],
+      where: { tenantId, status: 'WON' },
+      _count: { _all: true }
+    });
+
+    const channelConversionMap = new Map(channelConversions.map(c => [c.channel, c._count._all]));
+    
+    const channelStats = channelPerformance.map(cp => ({
+      channel: cp.channel,
+      total: cp._count._all,
+      converted: channelConversionMap.get(cp.channel) || 0,
+      conversionRate: ((channelConversionMap.get(cp.channel) || 0) / cp._count._all * 100).toFixed(1)
+    }));
+
+    res.json({
+      ok: true,
+      days,
+      since: since.toISOString(),
+      timeSeries,
+      channelStats
+    });
+  })
+);
+
+// Export analytics data as CSV
+routes.get(
+  '/analytics/export',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const reportType = z.enum(['leads', 'success', 'salesmen']).parse((req.query as any)?.type);
+
+    if (reportType === 'leads') {
+      const leads = await prisma.lead.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+        include: { assignee: { include: { user: true } } }
+      });
+
+      const headers = ['ID', 'Full Name', 'Phone', 'Email', 'Channel', 'Status', 'Heat', 'Assigned To', 'Created At'];
+      const rows = leads.map(l => [
+        l.id,
+        l.fullName ?? '',
+        l.phone ?? '',
+        l.email ?? '',
+        l.channel,
+        l.status,
+        l.heat,
+        l.assignee?.user.displayName ?? 'Unassigned',
+        l.createdAt.toISOString()
+      ]);
+
+      const csvLines = [headers, ...rows].map(row =>
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      );
+      const csv = csvLines.join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="leads-report-${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    } else if (reportType === 'success') {
+      const events = await prisma.successEvent.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+        include: {
+          lead: { select: { fullName: true, phone: true } },
+          salesman: { include: { user: true } },
+          definition: { select: { name: true } }
+        }
+      });
+
+      const headers = ['ID', 'Type', 'Definition', 'Weight', 'Lead Name', 'Lead Phone', 'Salesman', 'Note', 'Created At'];
+      const rows = events.map(e => [
+        e.id,
+        e.type,
+        e.definition?.name ?? e.type,
+        e.weight,
+        e.lead.fullName ?? '',
+        e.lead.phone ?? '',
+        e.salesman?.user.displayName ?? 'Unknown',
+        e.note ?? '',
+        e.createdAt.toISOString()
+      ]);
+
+      const csvLines = [headers, ...rows].map(row =>
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      );
+      const csv = csvLines.join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="success-report-${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    } else if (reportType === 'salesmen') {
+      const salesmen = await prisma.salesman.findMany({
+        where: { tenantId },
+        include: {
+          user: true,
+          assignedLeads: {
+            where: { status: { notIn: ['WON', 'LOST'] } }
+          }
+        }
+      });
+
+      const successCounts = await prisma.successEvent.groupBy({
+        by: ['salesmanId'],
+        where: { tenantId },
+        _count: { _all: true },
+        _sum: { weight: true }
+      });
+
+      const successMap = new Map(successCounts.map(s => [s.salesmanId, { count: s._count._all, weight: s._sum.weight || 0 }]));
+
+      const headers = ['ID', 'Name', 'Email', 'Active', 'Score', 'Capacity', 'Active Leads', 'Success Events', 'Success Weight'];
+      const rows = salesmen.map(s => {
+        const success = successMap.get(s.id) || { count: 0, weight: 0 };
+        return [
+          s.id,
+          s.user.displayName,
+          s.user.email,
+          s.isActive ? 'Yes' : 'No',
+          s.score,
+          s.capacity,
+          s.assignedLeads.length,
+          success.count,
+          success.weight
+        ];
+      });
+
+      const csvLines = [headers, ...rows].map(row =>
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      );
+      const csv = csvLines.join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="salesmen-report-${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csv);
+    }
+  })
+);
+
 // Dev seed: create 5 salesman users + profiles and a few leads.
 routes.post(
   '/dev/seed',

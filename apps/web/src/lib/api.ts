@@ -421,6 +421,35 @@ export async function getDashboardStats() {
   return request<any>('/analytics/dashboard')
 }
 
+export async function getTimeSeriesAnalytics(days = 30) {
+  return request<{
+    ok: true;
+    days: number;
+    since: string;
+    timeSeries: Array<{ date: string; newLeads: number; messagesIn: number; messagesOut: number; successEvents: number; successWeight: number }>;
+    channelStats: Array<{ channel: string; total: number; converted: number; conversionRate: string }>;
+  }>(`/analytics/time-series?days=${encodeURIComponent(String(days))}`)
+}
+
+export async function exportAnalyticsReport(type: 'leads' | 'success' | 'salesmen') {
+  const response = await fetch(`${baseUrl()}/analytics/export?type=${encodeURIComponent(type)}`, {
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Export failed');
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${type}-report-${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
 export async function createSuccessDefinition(payload: {
   name: string
   type: SuccessEventType
