@@ -447,6 +447,54 @@ export async function getAllTasks(status?: TaskStatus) {
   }>(`/tasks${query}`)
 }
 
+// Lead Scoring
+export async function recalculateLeadScore(leadId: string) {
+  return request<{ ok: true; score: number; qualificationLevel: string | null; lastActivityAt: string | null }>(`/leads/${leadId}/recalculate-score`, {
+    method: 'POST',
+    body: '{}'
+  })
+}
+
+export async function bulkRecalculateScores() {
+  return request<{ ok: true; totalLeads: number; updated: number }>('/leads/bulk/recalculate-scores', {
+    method: 'POST',
+    body: '{}'
+  })
+}
+
+// Activity Feed
+export async function getActivityFeed(limit?: number) {
+  const query = limit ? `?limit=${limit}` : ''
+  return request<{
+    feed: Array<{
+      time: string
+      type: string
+      data: any
+    }>
+  }>(`/activity-feed${query}`)
+}
+
+// Audit Logs
+export async function getAuditLogs(params?: { limit?: number; entityType?: string; entityId?: string }) {
+  const query = new URLSearchParams()
+  if (params?.limit) query.set('limit', params.limit.toString())
+  if (params?.entityType) query.set('entityType', params.entityType)
+  if (params?.entityId) query.set('entityId', params.entityId)
+  
+  return request<{
+    logs: Array<{
+      id: string
+      action: string
+      entityType: string
+      entityId: string | null
+      changes: any
+      metadata: any
+      userId: string | null
+      createdAt: string
+    }>
+  }>(`/audit-logs?${query.toString()}`)
+}
+
 export async function listMessageTemplates() {
   return request<{ templates: Array<{ id: string; name: string; content: string; channel: string; isActive: boolean }> }>('/message-templates')
 }

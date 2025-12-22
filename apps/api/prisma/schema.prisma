@@ -215,6 +215,9 @@ model Lead {
   language    String     @default("en")
   heat        LeadHeat   @default(COLD)
   status      LeadStatus @default(NEW)
+  score       Int        @default(0)
+  qualificationLevel String? // HOT, WARM, COLD, QUALIFIED
+  lastActivityAt DateTime? // Last interaction time
 
   assignedToSalesmanId String?
 
@@ -414,4 +417,23 @@ model Task {
   @@index([tenantId, userId])
   @@index([tenantId, userId, status])
   @@index([tenantId, dueDate])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String?
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entityType  String   // Lead, Task, Call, etc.
+  entityId    String?
+  changes     Json?    // What changed
+  metadata    Json?    // Additional context
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
 }

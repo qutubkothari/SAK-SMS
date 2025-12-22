@@ -7,6 +7,8 @@ import { clearAuthCookie, getAuthContext, getTenantId, hashPassword, setAuthCook
 import { createAiGatewayForTenant } from './ai/tenantAi.js';
 import { pickSalesmanRoundRobin } from './services/routing.js';
 import { recomputeSalesmanScores } from './services/scoring.js';
+import { updateLeadScore, calculateLeadScore, getQualificationLevel } from './services/leadScoring.js';
+import { createAuditLog } from './services/auditLog.js';
 
 export const routes = Router();
 
@@ -2488,6 +2490,256 @@ routes.post(
     const ingestBody = ingestMessageSchema.parse(rest);
     const out = await handleIngestMessage({ tenantId, body: ingestBody });
     res.json(out);
+  })
+);
+
+// Lead Scoring
+routes.post(
+  '/leads/:id/recalculate-score',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    await updateLeadScore(leadId);
+    const updated = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { score: true, qualificationLevel: true, lastActivityAt: true }
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'RECALCULATE_SCORE',
+      entityType: 'Lead',
+      entityId: leadId,
+      metadata: updated
+    });
+
+    res.json({ ok: true, ...updated });
+  })
+);
+
+// Bulk recalculate scores for all leads
+routes.post(
+  '/leads/bulk/recalculate-scores',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const leads = await prisma.lead.findMany({
+      where: { tenantId },
+      select: { id: true }
+    });
+
+    let updated = 0;
+    for (const lead of leads) {
+      try {
+        await updateLeadScore(lead.id);
+        updated++;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`Failed to update score for lead ${lead.id}:`, err);
+      }
+    }
+
+    res.json({ ok: true, totalLeads: leads.length, updated });
+  })
+);
+
+// Bulk lead operations
+routes.post(
+  '/leads/bulk/assign',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const body = z.object({
+      leadIds: z.array(z.string()).min(1),
+      salesmanId: z.string()
+    }).parse(req.body);
+
+    const result = await prisma.lead.updateMany({
+      where: { 
+        id: { in: body.leadIds },
+        tenantId 
+      },
+      data: { assignedToSalesmanId: body.salesmanId }
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'BULK_ASSIGN',
+      entityType: 'Lead',
+      metadata: { leadIds: body.leadIds, salesmanId: body.salesmanId, count: result.count }
+    });
+
+    res.json({ ok: true, updated: result.count });
+  })
+);
+
+routes.post(
+  '/leads/bulk/update-status',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const body = z.object({
+      leadIds: z.array(z.string()).min(1),
+      status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'])
+    }).parse(req.body);
+
+    const result = await prisma.lead.updateMany({
+      where: { 
+        id: { in: body.leadIds },
+        tenantId 
+      },
+      data: { status: body.status as any }
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'BULK_UPDATE_STATUS',
+      entityType: 'Lead',
+      metadata: { leadIds: body.leadIds, status: body.status, count: result.count }
+    });
+
+    res.json({ ok: true, updated: result.count });
+  })
+);
+
+// Activity Feed
+routes.get(
+  '/activity-feed',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    
+    const limit = z.coerce.number().int().positive().max(100).default(50).parse(req.query.limit);
+
+    // Get recent events across the tenant
+    const events = await prisma.leadEvent.findMany({
+      where: { tenantId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            status: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+
+    // Get recent notes
+    const notes = await prisma.note.findMany({
+      where: { tenantId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    // Get recent calls
+    const calls = await prisma.call.findMany({
+      where: { tenantId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    // Get recent tasks
+    const tasks = await prisma.task.findMany({
+      where: { tenantId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    // Combine and sort by time
+    const feed: Array<{ time: Date; type: string; data: any }> = [];
+    
+    events.forEach(e => feed.push({ time: e.createdAt, type: 'event', data: e }));
+    notes.forEach(n => feed.push({ time: n.createdAt, type: 'note', data: n }));
+    calls.forEach(c => feed.push({ time: c.createdAt, type: 'call', data: c }));
+    tasks.forEach(t => feed.push({ time: t.createdAt, type: 'task', data: t }));
+
+    feed.sort((a, b) => b.time.getTime() - a.time.getTime());
+
+    res.json({ feed: feed.slice(0, limit) });
+  })
+);
+
+// Audit Logs
+routes.get(
+  '/audit-logs',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const limit = z.coerce.number().int().positive().max(500).default(100).parse(req.query.limit);
+    const entityType = req.query.entityType ? z.string().parse(req.query.entityType) : undefined;
+    const entityId = req.query.entityId ? z.string().parse(req.query.entityId) : undefined;
+
+    const where: any = { tenantId };
+    if (entityType) where.entityType = entityType;
+    if (entityId) where.entityId = entityId;
+
+    const logs = await prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+
+    res.json({ logs });
   })
 );
 
