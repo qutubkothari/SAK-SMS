@@ -809,6 +809,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [successDefs, setSuccessDefs] = useState<any[]>([])
   const [selectedSuccessDefId, setSelectedSuccessDefId] = useState<string>('')
   const [successNote, setSuccessNote] = useState<string>('')
+  const [viewMode, setViewMode] = useState<'overview' | 'timeline'>('overview')
   const canAssign = useMemo(() => {
     if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
     return role !== 'SALESMAN'
@@ -842,74 +843,110 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId])
 
+  // Build timeline from messages, events, triage items, and success events
+  const timeline = useMemo(() => {
+    if (!lead) return []
+    const items: Array<{ time: Date; type: string; data: any }> = []
+    
+    ;(lead.messages ?? []).forEach((m: any) => {
+      items.push({ time: new Date(m.createdAt), type: 'message', data: m })
+    })
+    
+    ;(lead.events ?? []).forEach((e: any) => {
+      items.push({ time: new Date(e.createdAt), type: 'event', data: e })
+    })
+    
+    ;(lead.triageItems ?? []).forEach((t: any) => {
+      items.push({ time: new Date(t.createdAt), type: 'triage', data: t })
+    })
+    
+    ;(lead.successEvents ?? []).forEach((s: any) => {
+      items.push({ time: new Date(s.createdAt), type: 'success', data: s })
+    })
+    
+    return items.sort((a, b) => b.time.getTime() - a.time.getTime())
+  }, [lead])
+
   if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
 
   return (
     <div style={{ padding: 12 }}>
-      <h2 style={{ marginTop: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
-      <div className="sak-card" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, padding: 12 }}>
-        <div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>{t('channel')}</div>
-          <div>{lead.channel}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>{t('status')}</div>
-          <div>
-            <Badge
-              kind={lead.status === 'WON' ? 'ok' : lead.status === 'LOST' ? 'danger' : lead.status === 'NEW' ? 'warn' : 'muted'}
-              text={lead.status}
-            />
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>{t('heat')}</div>
-          <div>
-            <Badge
-              kind={lead.heat === 'ON_FIRE' || lead.heat === 'VERY_HOT' ? 'danger' : lead.heat === 'HOT' ? 'warn' : 'muted'}
-              text={lead.heat}
-            />
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>{t('assignedTo')}</div>
-          <div>{lead.assignedToSalesmanId ?? t('unassigned')}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setViewMode('overview')} style={{ fontWeight: viewMode === 'overview' ? 'bold' : 'normal' }}>
+            Overview
+          </button>
+          <button onClick={() => setViewMode('timeline')} style={{ fontWeight: viewMode === 'timeline' ? 'bold' : 'normal' }}>
+            Timeline
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label>
-          {t('updateStatus')}:
-          <select
-            value={lead.status}
-            onChange={async (e) => {
-              try {
-                await updateLeadStatus(lead.id, e.target.value)
-                onInfo('Status updated')
-                await refresh()
-              } catch (err) {
-                onError(err instanceof Error ? err.message : 'Failed')
-              }
-            }}
-            style={{ marginLeft: 8 }}
-          >
-            {['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
+      {/* Lead info card */}
+      <div className="sak-card" style={{ marginBottom: 12, padding: 12 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('channel')}</div>
+            <div>{lead.channel}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('status')}</div>
+            <div>
+              <Badge
+                kind={lead.status === 'WON' ? 'ok' : lead.status === 'LOST' ? 'danger' : lead.status === 'NEW' ? 'warn' : 'muted'}
+                text={lead.status}
+              />
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('heat')}</div>
+            <div>
+              <Badge
+                kind={lead.heat === 'ON_FIRE' || lead.heat === 'VERY_HOT' ? 'danger' : lead.heat === 'HOT' ? 'warn' : 'muted'}
+                text={lead.heat}
+              />
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('assignedTo')}</div>
+            <div>{lead.assignedToSalesmanId ?? t('unassigned')}</div>
+          </div>
+          {lead.phone ? (
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Phone</div>
+              <div>{lead.phone}</div>
+            </div>
+          ) : null}
+          {lead.email ? (
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Email</div>
+              <div>{lead.email}</div>
+            </div>
+          ) : null}
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Language</div>
+            <div>{lead.language}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Created</div>
+            <div style={{ fontSize: 13 }}>{new Date(lead.createdAt).toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Updated</div>
+            <div style={{ fontSize: 13 }}>{new Date(lead.updatedAt).toLocaleString()}</div>
+          </div>
+        </div>
 
-        {canAssign ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', paddingTop: 8, borderTop: '1px solid #e0e0e0' }}>
           <label>
-            {t('assign')}:
+            {t('updateStatus')}:
             <select
-              value={lead.assignedToSalesmanId ?? ''}
+              value={lead.status}
               onChange={async (e) => {
                 try {
-                  const value = e.target.value
-                  await assignLead(lead.id, value === '' ? null : value)
-                  onInfo('Assignment updated')
+                  await updateLeadStatus(lead.id, e.target.value)
+                  onInfo('Status updated')
                   await refresh()
                 } catch (err) {
                   onError(err instanceof Error ? err.message : 'Failed')
@@ -917,110 +954,236 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
               }}
               style={{ marginLeft: 8 }}
             >
-              <option value="">{t('unassigned')}</option>
-              {salesmen.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName}
+              {['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'].map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
           </label>
-        ) : null}
+
+          {canAssign ? (
+            <label>
+              {t('assign')}:
+              <select
+                value={lead.assignedToSalesmanId ?? ''}
+                onChange={async (e) => {
+                  try {
+                    const value = e.target.value
+                    await assignLead(lead.id, value === '' ? null : value)
+                    onInfo('Assignment updated')
+                    await refresh()
+                  } catch (err) {
+                    onError(err instanceof Error ? err.message : 'Failed')
+                  }
+                }}
+                style={{ marginLeft: 8 }}
+              >
+                <option value="">{t('unassigned')}</option>
+                {salesmen.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Messages</div>
-        {(lead.messages ?? []).length === 0 ? (
-          <div style={{ opacity: 0.8 }}>No messages yet.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(lead.messages ?? []).map((m: any) => (
-              <div key={m.id} className="sak-card" style={{ padding: 10 }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  {m.direction} • {m.channel} • {new Date(m.createdAt).toLocaleString()}
-                </div>
-                <div>{m.body}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Triage history</div>
-        {(lead.triageItems ?? []).length === 0 ? (
-          <div style={{ opacity: 0.8 }}>No triage items.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(lead.triageItems ?? []).map((it: any) => (
-              <div key={it.id} className="sak-card" style={{ padding: 10 }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(it.createdAt).toLocaleString()}</div>
-                <div>
-                  <Badge kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : 'muted'} text={it.status} />{' '}
-                  • {it.reason}
-                  {it.suggestedSalesmanId ? ` • suggested ${it.suggestedSalesmanId}` : ''}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {canAssign ? (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Success</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select value={selectedSuccessDefId} onChange={(e) => setSelectedSuccessDefId(e.target.value)}>
-              {successDefs.length === 0 ? <option value="">No success definitions</option> : null}
-              {successDefs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.type}, weight {d.weight})
-                </option>
-              ))}
-            </select>
-            <input
-              value={successNote}
-              onChange={(e) => setSuccessNote(e.target.value)}
-              placeholder="Note (optional)"
-              style={{ minWidth: 260 }}
-            />
-            <button
-              disabled={!selectedSuccessDefId}
-              onClick={async () => {
-                try {
-                  await recordLeadSuccess(lead.id, { definitionId: selectedSuccessDefId, note: successNote || undefined })
-                  onInfo('Success recorded')
-                  setSuccessNote('')
-                  await refresh()
-                } catch (err) {
-                  onError(err instanceof Error ? err.message : 'Failed')
-                }
-              }}
-            >
-              Record
-            </button>
-          </div>
-
-          <div style={{ marginTop: 10 }}>
-            {(lead.successEvents ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No success events yet.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {(lead.successEvents ?? []).map((ev: any) => (
-                  <div key={ev.id} className="sak-card" style={{ borderRadius: 12, padding: 10 }}>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(ev.createdAt).toLocaleString()}</div>
+      {viewMode === 'timeline' ? (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Activity Timeline</h3>
+          {timeline.length === 0 ? (
+            <div style={{ opacity: 0.8 }}>No activity yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {timeline.map((item, idx) => (
+                <div key={idx} className="sak-card" style={{ padding: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Badge
+                      kind={
+                        item.type === 'message'
+                          ? item.data.direction === 'IN'
+                            ? 'warn'
+                            : 'ok'
+                          : item.type === 'success'
+                          ? 'ok'
+                          : item.type === 'triage' && item.data.status === 'OPEN'
+                          ? 'danger'
+                          : 'muted'
+                      }
+                      text={item.type.toUpperCase()}
+                    />
+                    <span style={{ fontSize: 13, opacity: 0.7 }}>{item.time.toLocaleString()}</span>
+                  </div>
+                  {item.type === 'message' ? (
                     <div>
-                      {ev.type} • weight {ev.weight}
-                      {ev.salesmanId ? ` • salesman ${ev.salesmanId}` : ''}
+                      <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
+                        {item.data.direction} • {item.data.channel}
+                      </div>
+                      <div>{item.data.body}</div>
                     </div>
-                    {ev.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{ev.note}</div> : null}
+                  ) : item.type === 'event' ? (
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.data.type}</div>
+                      <pre style={{ fontSize: 11, opacity: 0.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                        {JSON.stringify(item.data.payload, null, 2)}
+                      </pre>
+                    </div>
+                  ) : item.type === 'triage' ? (
+                    <div>
+                      <div>
+                        <Badge
+                          kind={item.data.status === 'OPEN' ? 'warn' : item.data.status === 'CLOSED' ? 'ok' : 'muted'}
+                          text={item.data.status}
+                        />{' '}
+                        • {item.data.reason}
+                      </div>
+                      {item.data.suggestedSalesmanId ? (
+                        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                          Suggested: {item.data.suggestedSalesmanId}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : item.type === 'success' ? (
+                    <div>
+                      <div>
+                        {item.data.type} • weight {item.data.weight}
+                      </div>
+                      {item.data.salesmanId ? (
+                        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>Salesman: {item.data.salesmanId}</div>
+                      ) : null}
+                      {item.data.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{item.data.note}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ marginTop: 16 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Messages</h3>
+            {(lead.messages ?? []).length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No messages yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(lead.messages ?? []).map((m: any) => (
+                  <div key={m.id} className="sak-card" style={{ padding: 10 }}>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
+                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> • {m.channel} •{' '}
+                      {new Date(m.createdAt).toLocaleString()}
+                    </div>
+                    <div>{m.body}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
-      ) : null}
+
+          <div style={{ marginTop: 16 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Events</h3>
+            {(lead.events ?? []).length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No events yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(lead.events ?? []).map((e: any) => (
+                  <div key={e.id} className="sak-card" style={{ padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <Badge kind="muted" text={e.type} />
+                      <span style={{ fontSize: 12, opacity: 0.7 }}>{new Date(e.createdAt).toLocaleString()}</span>
+                    </div>
+                    <details>
+                      <summary style={{ cursor: 'pointer', fontSize: 13, opacity: 0.8 }}>Show details</summary>
+                      <pre style={{ fontSize: 11, marginTop: 6, whiteSpace: 'pre-wrap' }}>
+                        {JSON.stringify(e.payload, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Triage History</h3>
+            {(lead.triageItems ?? []).length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No triage items.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(lead.triageItems ?? []).map((it: any) => (
+                  <div key={it.id} className="sak-card" style={{ padding: 10 }}>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{new Date(it.createdAt).toLocaleString()}</div>
+                    <div>
+                      <Badge kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : 'muted'} text={it.status} />{' '}
+                      • {it.reason}
+                      {it.suggestedSalesmanId ? ` • suggested ${it.suggestedSalesmanId}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {canAssign ? (
+            <div style={{ marginTop: 16 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 8 }}>Success</h3>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={selectedSuccessDefId} onChange={(e) => setSelectedSuccessDefId(e.target.value)}>
+                  {successDefs.length === 0 ? <option value="">No success definitions</option> : null}
+                  {successDefs.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.type}, weight {d.weight})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={successNote}
+                  onChange={(e) => setSuccessNote(e.target.value)}
+                  placeholder="Note (optional)"
+                  style={{ minWidth: 260 }}
+                />
+                <button
+                  disabled={!selectedSuccessDefId}
+                  onClick={async () => {
+                    try {
+                      await recordLeadSuccess(lead.id, { definitionId: selectedSuccessDefId, note: successNote || undefined })
+                      onInfo('Success recorded')
+                      setSuccessNote('')
+                      await refresh()
+                    } catch (err) {
+                      onError(err instanceof Error ? err.message : 'Failed')
+                    }
+                  }}
+                >
+                  Record
+                </button>
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                {(lead.successEvents ?? []).length === 0 ? (
+                  <div style={{ opacity: 0.8 }}>No success events yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(lead.successEvents ?? []).map((ev: any) => (
+                      <div key={ev.id} className="sak-card" style={{ borderRadius: 12, padding: 10 }}>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(ev.createdAt).toLocaleString()}</div>
+                        <div>
+                          {ev.type} • weight {ev.weight}
+                          {ev.salesmanId ? ` • salesman ${ev.salesmanId}` : ''}
+                        </div>
+                        {ev.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{ev.note}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   )
 }
