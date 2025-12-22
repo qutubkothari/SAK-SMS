@@ -357,6 +357,96 @@ export async function logCall(
   })
 }
 
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+
+export async function getLeadTasks(leadId: string) {
+  return request<{
+    tasks: Array<{
+      id: string
+      title: string
+      description: string | null
+      dueDate: string | null
+      priority: TaskPriority
+      status: TaskStatus
+      completedAt: string | null
+      createdAt: string
+      updatedAt: string
+      userId: string
+    }>
+  }>(`/leads/${leadId}/tasks`)
+}
+
+export async function createTask(
+  leadId: string,
+  payload: {
+    title: string
+    description?: string
+    dueDate?: string
+    priority?: TaskPriority
+    assignedUserId?: string
+  }
+) {
+  return request<{
+    ok: true
+    task: {
+      id: string
+      title: string
+      description: string | null
+      dueDate: string | null
+      priority: TaskPriority
+      status: TaskStatus
+      createdAt: string
+    }
+  }>(`/leads/${leadId}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateTask(
+  taskId: string,
+  payload: {
+    title?: string
+    description?: string
+    dueDate?: string | null
+    priority?: TaskPriority
+    status?: TaskStatus
+  }
+) {
+  return request<{ ok: true; task: any }>(`/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteTask(taskId: string) {
+  return request<{ ok: true }>(`/tasks/${taskId}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getAllTasks(status?: TaskStatus) {
+  const query = status ? `?status=${status}` : ''
+  return request<{
+    tasks: Array<{
+      id: string
+      title: string
+      description: string | null
+      dueDate: string | null
+      priority: TaskPriority
+      status: TaskStatus
+      completedAt: string | null
+      createdAt: string
+      lead: {
+        id: string
+        fullName: string | null
+        phone: string | null
+      }
+    }>
+  }>(`/tasks${query}`)
+}
+
 export async function listMessageTemplates() {
   return request<{ templates: Array<{ id: string; name: string; content: string; channel: string; isActive: boolean }> }>('/message-templates')
 }

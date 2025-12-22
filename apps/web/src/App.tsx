@@ -22,6 +22,10 @@ import {
   addLeadNote,
   getLeadCalls,
   logCall,
+  getLeadTasks,
+  createTask,
+  updateTask,
+  deleteTask,
   listMessageTemplates,
   sendLeadMessage,
   importLeadsCsv,
@@ -1239,7 +1243,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [successDefs, setSuccessDefs] = useState<any[]>([])
   const [selectedSuccessDefId, setSelectedSuccessDefId] = useState<string>('')
   const [successNote, setSuccessNote] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'overview' | 'timeline' | 'notes'>('overview')
+  const [viewMode, setViewMode] = useState<'overview' | 'timeline' | 'notes' | 'tasks'>('overview')
   const [notes, setNotes] = useState<any[]>([])
   const [newNoteContent, setNewNoteContent] = useState<string>('')
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false)
@@ -1253,6 +1257,13 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [callNotes, setCallNotes] = useState<string>('')
   const [callRecordingUrl, setCallRecordingUrl] = useState<string>('')
   const [calls, setCalls] = useState<any[]>([])
+  const [showTaskModal, setShowTaskModal] = useState<boolean>(false)
+  const [taskTitle, setTaskTitle] = useState<string>('')
+  const [taskDescription, setTaskDescription] = useState<string>('')
+  const [taskDueDate, setTaskDueDate] = useState<string>('')
+  const [taskPriority, setTaskPriority] = useState<string>('MEDIUM')
+  const [tasks, setTasks] = useState<any[]>([])
+  const [editingTask, setEditingTask] = useState<any | null>(null)
   const canAssign = useMemo(() => {
     if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
     return role !== 'SALESMAN'
@@ -1276,6 +1287,15 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     }
   }
 
+  async function refreshTasks() {
+    try {
+      const out = await getLeadTasks(leadId)
+      setTasks(out.tasks)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to load tasks')
+    }
+  }
+
   async function refreshNotes() {
     try {
       const out = await getLeadNotes(leadId)
@@ -1289,6 +1309,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     refresh()
     refreshNotes()
     refreshCalls()
+    refreshTasks()
     ;(async () => {
       try {
         if (canAssign) {
@@ -1541,6 +1562,118 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
         </div>
       )}
 
+      {/* Task Modal */}
+      {showTaskModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="sak-card" style={{
+            maxWidth: 600,
+            width: '90%',
+            padding: 24,
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h3>
+              <button onClick={() => setShowTaskModal(false)}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Title</label>
+              <input
+                type="text"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Task title"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Description</label>
+              <textarea
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                rows={4}
+                style={{ width: '100%' }}
+                placeholder="Optional task description..."
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Due Date</label>
+              <input
+                type="datetime-local"
+                value={taskDueDate}
+                onChange={(e) => setTaskDueDate(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Priority</label>
+              <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowTaskModal(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={async () => {
+                  if (!taskTitle.trim()) return
+                  try {
+                    if (editingTask) {
+                      await updateTask(editingTask.id, {
+                        title: taskTitle,
+                        description: taskDescription || undefined,
+                        dueDate: taskDueDate || null,
+                        priority: taskPriority as any
+                      })
+                      onInfo('Task updated')
+                    } else {
+                      await createTask(leadId, {
+                        title: taskTitle,
+                        description: taskDescription || undefined,
+                        dueDate: taskDueDate || undefined,
+                        priority: taskPriority as any
+                      })
+                      onInfo('Task created')
+                    }
+                    setTaskTitle('')
+                    setTaskDescription('')
+                    setTaskDueDate('')
+                    setTaskPriority('MEDIUM')
+                    setEditingTask(null)
+                    setShowTaskModal(false)
+                    await refreshTasks()
+                  } catch (e) {
+                    onError(e instanceof Error ? e.message : 'Failed to save task')
+                  }
+                }}
+                disabled={!taskTitle.trim()}
+              >
+                {editingTask ? 'Update Task' : 'Create Task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div style={{ padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
@@ -1553,6 +1686,9 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           </button>
           <button onClick={() => setViewMode('notes')} style={{ fontWeight: viewMode === 'notes' ? 'bold' : 'normal' }}>
             Notes ({notes.length})
+          </button>
+          <button onClick={() => setViewMode('tasks')} style={{ fontWeight: viewMode === 'tasks' ? 'bold' : 'normal' }}>
+            Tasks ({tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length})
           </button>
         </div>
       </div>
@@ -1627,6 +1763,21 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             style={{ fontSize: 14 }}
           >
             📞 Log Call
+          </button>
+
+          <button
+            className="primary"
+            onClick={() => {
+              setEditingTask(null)
+              setTaskTitle('')
+              setTaskDescription('')
+              setTaskDueDate('')
+              setTaskPriority('MEDIUM')
+              setShowTaskModal(true)
+            }}
+            style={{ fontSize: 14 }}
+          >
+            ✅ Add Task
           </button>
 
           <label>
@@ -1821,6 +1972,117 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                     <div style={{ fontSize: 12, opacity: 0.7 }}>{new Date(note.createdAt).toLocaleString()}</div>
                   </div>
                   <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{note.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : viewMode === 'tasks' ? (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Tasks</h3>
+          
+          {tasks.length === 0 ? (
+            <div style={{ opacity: 0.8 }}>No tasks yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {tasks.map((task) => (
+                <div key={task.id} className="sak-card" style={{ padding: 16, opacity: task.status === 'COMPLETED' || task.status === 'CANCELLED' ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Badge
+                        kind={
+                          task.status === 'COMPLETED' ? 'ok' :
+                          task.status === 'IN_PROGRESS' ? 'warn' :
+                          task.status === 'CANCELLED' ? 'muted' :
+                          'danger'
+                        }
+                        text={task.status.replace('_', ' ')}
+                      />
+                      <Badge
+                        kind={
+                          task.priority === 'URGENT' ? 'danger' :
+                          task.priority === 'HIGH' ? 'warn' :
+                          'muted'
+                        }
+                        text={task.priority}
+                      />
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>
+                      {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'No due date'}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{task.title}</div>
+                  {task.description && (
+                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: 8, opacity: 0.9 }}>
+                      {task.description}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    {task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingTask(task)
+                            setTaskTitle(task.title)
+                            setTaskDescription(task.description || '')
+                            setTaskDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : '')
+                            setTaskPriority(task.priority)
+                            setShowTaskModal(true)
+                          }}
+                          style={{ fontSize: 12 }}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await updateTask(task.id, {
+                                status: task.status === 'IN_PROGRESS' ? 'PENDING' : 'IN_PROGRESS'
+                              })
+                              onInfo('Task status updated')
+                              await refreshTasks()
+                            } catch (e) {
+                              onError(e instanceof Error ? e.message : 'Failed to update task')
+                            }
+                          }}
+                          style={{ fontSize: 12 }}
+                        >
+                          {task.status === 'IN_PROGRESS' ? '⏸️ Pause' : '▶️ Start'}
+                        </button>
+                        <button
+                          className="primary"
+                          onClick={async () => {
+                            try {
+                              await updateTask(task.id, { status: 'COMPLETED' })
+                              onInfo('Task completed')
+                              await refreshTasks()
+                            } catch (e) {
+                              onError(e instanceof Error ? e.message : 'Failed to complete task')
+                            }
+                          }}
+                          style={{ fontSize: 12 }}
+                        >
+                          ✓ Complete
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to delete this task?')) {
+                          try {
+                            await deleteTask(task.id)
+                            onInfo('Task deleted')
+                            await refreshTasks()
+                          } catch (e) {
+                            onError(e instanceof Error ? e.message : 'Failed to delete task')
+                          }
+                        }
+                      }}
+                      style={{ fontSize: 12, marginLeft: 'auto' }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

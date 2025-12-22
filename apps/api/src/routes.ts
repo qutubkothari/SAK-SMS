@@ -1739,6 +1739,243 @@ routes.post(
   })
 );
 
+// Task Management
+routes.get(
+  '/leads/:id/tasks',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Salesmen can only view tasks for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { leadId, tenantId },
+      orderBy: { dueDate: 'asc' }
+    });
+
+    res.json({ tasks });
+  })
+);
+
+routes.post(
+  '/leads/:id/tasks',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Salesmen can only create tasks for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const input = z.object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      dueDate: z.string().datetime().optional(),
+      priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+      assignedUserId: z.string().optional()
+    }).parse(req.body);
+
+    const task = await prisma.task.create({
+      data: {
+        tenantId,
+        leadId,
+        userId: input.assignedUserId || userId,
+        title: input.title,
+        description: input.description,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        priority: input.priority as any || 'MEDIUM'
+      }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId,
+        type: 'TASK_CREATED',
+        payload: { taskId: task.id, userId, title: task.title }
+      }
+    });
+
+    res.json({ 
+      ok: true, 
+      task: { 
+        id: task.id, 
+        title: task.title,
+        description: task.description,
+        dueDate: task.dueDate?.toISOString(),
+        priority: task.priority,
+        status: task.status,
+        createdAt: task.createdAt.toISOString() 
+      } 
+    });
+  })
+);
+
+routes.patch(
+  '/tasks/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const taskId = z.string().parse(req.params.id);
+
+    const existingTask = await prisma.task.findFirst({
+      where: { id: taskId, tenantId }
+    });
+
+    if (!existingTask) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    // Salesmen can only update tasks for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: existingTask.leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const input = z.object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+      dueDate: z.string().datetime().optional().nullable(),
+      priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+      status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional()
+    }).parse(req.body);
+
+    const updateData: any = {};
+    if (input.title !== undefined) updateData.title = input.title;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.dueDate !== undefined) updateData.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+    if (input.priority !== undefined) updateData.priority = input.priority;
+    if (input.status !== undefined) {
+      updateData.status = input.status;
+      if (input.status === 'COMPLETED' && !existingTask.completedAt) {
+        updateData.completedAt = new Date();
+      } else if (input.status !== 'COMPLETED' && existingTask.completedAt) {
+        updateData.completedAt = null;
+      }
+    }
+
+    const task = await prisma.task.update({
+      where: { id: taskId },
+      data: updateData
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId: existingTask.leadId,
+        type: 'TASK_UPDATED',
+        payload: { taskId: task.id, userId, changes: input }
+      }
+    });
+
+    res.json({ ok: true, task });
+  })
+);
+
+routes.delete(
+  '/tasks/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const taskId = z.string().parse(req.params.id);
+
+    const existingTask = await prisma.task.findFirst({
+      where: { id: taskId, tenantId }
+    });
+
+    if (!existingTask) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    // Salesmen can only delete tasks for their assigned leads
+    if (role === 'SALESMAN') {
+      const lead = await prisma.lead.findFirst({
+        where: { id: existingTask.leadId, tenantId, assignedToSalesmanId: userId }
+      });
+      if (!lead) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    await prisma.task.delete({
+      where: { id: taskId }
+    });
+
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId: existingTask.leadId,
+        type: 'TASK_DELETED',
+        payload: { taskId, userId, title: existingTask.title }
+      }
+    });
+
+    res.json({ ok: true });
+  })
+);
+
+// Get all tasks for current user
+routes.get(
+  '/tasks',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    
+    const statusFilter = req.query.status ? z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).parse(req.query.status) : undefined;
+
+    const where: any = { tenantId };
+    
+    if (role === 'SALESMAN') {
+      where.userId = userId;
+    }
+
+    if (statusFilter) {
+      where.status = statusFilter;
+    }
+
+    const tasks = await prisma.task.findMany({
+      where,
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true
+          }
+        }
+      },
+      orderBy: [
+        { dueDate: 'asc' },
+        { priority: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.json({ tasks });
+  })
+);
+
 // Message Templates
 routes.get(
   '/message-templates',
