@@ -316,30 +316,77 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
   const [password, setPassword] = useState('')
 
   return (
-    <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12, maxWidth: 520 }}>
-        <h2 style={{ marginTop: 0 }}>Login</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            Tenant ID
+    <div style={{ 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <div className="sak-card" style={{ 
+        padding: '48px 40px', 
+        maxWidth: 440, 
+        width: '100%',
+        boxShadow: 'var(--shadow-xl)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <h1 style={{ 
+            fontSize: '28px', 
+            fontWeight: 700, 
+            marginBottom: 8,
+            background: 'linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            SAK CRM
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
+            Sign in to your account
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Tenant ID</span>
             <input
               value={tenantId}
               onChange={(e) => {
                 setTenantId(e.target.value)
                 saveTenantId(e.target.value)
               }}
-              placeholder="tenantId"
+              placeholder="Enter your tenant ID"
+              style={{ fontSize: 15 }}
             />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@company.com" />
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Email</span>
+            <input 
+              type="email"
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              placeholder="your.email@company.com" 
+              style={{ fontSize: 15 }}
+            />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Password</span>
+            <input 
+              type="password" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              placeholder="Enter your password" 
+              style={{ fontSize: 15 }}
+            />
           </label>
           <button
+            className="primary"
+            style={{ 
+              marginTop: 8,
+              padding: '14px 20px',
+              fontSize: 15,
+              fontWeight: 600
+            }}
             onClick={async () => {
               try {
                 const out = await login({ tenantId, email, password })
@@ -350,7 +397,7 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
               }
             }}
           >
-            Login
+            Sign In
           </button>
         </div>
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
