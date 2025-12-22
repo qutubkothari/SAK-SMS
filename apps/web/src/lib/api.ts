@@ -311,6 +311,31 @@ export async function addLeadNote(leadId: string, content: string) {
   })
 }
 
+export async function listMessageTemplates() {
+  return request<{ templates: Array<{ id: string; name: string; content: string; channel: string; isActive: boolean }> }>('/message-templates')
+}
+
+export async function createMessageTemplate(payload: { name: string; content: string; channel: string }) {
+  return request<{ ok: true; template: { id: string; name: string; content: string } }>('/message-templates', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateMessageTemplate(id: string, payload: { name?: string; content?: string; isActive?: boolean }) {
+  return request<{ ok: true }>(`/message-templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function sendLeadMessage(leadId: string, channel: string, content: string) {
+  return request<{ ok: true; message: { id: string; createdAt: string } }>(`/leads/${leadId}/send-message`, {
+    method: 'POST',
+    body: JSON.stringify({ channel, content })
+  })
+}
+
 export async function devBootstrap(payload: {
   tenantName: string
   email: string

@@ -20,6 +20,8 @@ import {
   getLead,
   getLeadNotes,
   addLeadNote,
+  listMessageTemplates,
+  sendLeadMessage,
   importLeadsCsv,
   ingestMessage,
   listNotifications,
@@ -1236,6 +1238,10 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   const [viewMode, setViewMode] = useState<'overview' | 'timeline' | 'notes'>('overview')
   const [notes, setNotes] = useState<any[]>([])
   const [newNoteContent, setNewNoteContent] = useState<string>('')
+  const [showMessageModal, setShowMessageModal] = useState<boolean>(false)
+  const [messageChannel, setMessageChannel] = useState<string>('WHATSAPP')
+  const [messageContent, setMessageContent] = useState<string>('')
+  const [templates, setTemplates] = useState<any[]>([])
   const canAssign = useMemo(() => {
     if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
     return role !== 'SALESMAN'
@@ -1265,12 +1271,16 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     ;(async () => {
       try {
         if (canAssign) {
-          const [sm, defs] = await Promise.all([listSalesmen(), listSuccessDefinitions()])
+          const [sm, defs, tmpl] = await Promise.all([listSalesmen(), listSuccessDefinitions(), listMessageTemplates()])
           setSalesmen(sm.salesmen)
           setSuccessDefs(defs.definitions)
+          setTemplates(tmpl.templates)
           if (!selectedSuccessDefId && defs.definitions.length > 0) {
             setSelectedSuccessDefId(defs.definitions[0].id)
           }
+        } else {
+          const tmpl = await listMessageTemplates()
+          setTemplates(tmpl.templates)
         }
       } catch {
         // ignore
@@ -1306,6 +1316,94 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
   if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
 
   return (
+    <>
+      {/* Message Modal */}
+      {showMessageModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="sak-card" style={{
+            maxWidth: 600,
+            width: '90%',
+            padding: 24,
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>Send Message</h3>
+              <button onClick={() => setShowMessageModal(false)}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Channel</label>
+              <select value={messageChannel} onChange={(e) => setMessageChannel(e.target.value)}>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="MANUAL">Manual/Other</option>
+                <option value="FACEBOOK">Facebook</option>
+                <option value="INSTAGRAM">Instagram</option>
+              </select>
+            </div>
+
+            {templates.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Use Template</label>
+                <select onChange={(e) => {
+                  const tmpl = templates.find(t => t.id === e.target.value)
+                  if (tmpl) setMessageContent(tmpl.content)
+                }}>
+                  <option value="">-- Select Template --</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Message</label>
+              <textarea
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                rows={6}
+                style={{ width: '100%' }}
+                placeholder="Type your message..."
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowMessageModal(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={async () => {
+                  if (!messageContent.trim()) return
+                  try {
+                    await sendLeadMessage(leadId, messageChannel, messageContent)
+                    setMessageContent('')
+                    setShowMessageModal(false)
+                    onInfo('Message sent')
+                    await refresh()
+                  } catch (e) {
+                    onError(e instanceof Error ? e.message : 'Failed to send message')
+                  }
+                }}
+                disabled={!messageContent.trim()}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div style={{ padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
@@ -1378,6 +1476,14 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', paddingTop: 8, borderTop: '1px solid #e0e0e0' }}>
+          <button
+            className="primary"
+            onClick={() => setShowMessageModal(true)}
+            style={{ fontSize: 14 }}
+          >
+            📨 Send Message
+          </button>
+
           <label>
             {t('updateStatus')}:
             <select
@@ -1671,6 +1777,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
         </>
       )}
     </div>
+    </>
   )
 }
 

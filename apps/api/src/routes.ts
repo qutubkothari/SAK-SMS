@@ -1428,6 +1428,128 @@ routes.post(
   })
 );
 
+// Message Templates
+routes.get(
+  '/message-templates',
+  asyncHandler(async (req, res) => {
+    const { tenantId } = getAuthContext(req);
+
+    const templates = await prisma.messageTemplate.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ templates });
+  })
+);
+
+routes.post(
+  '/message-templates',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const body = z.object({
+      name: z.string().min(1),
+      content: z.string().min(1),
+      channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']).default('WHATSAPP')
+    }).parse(req.body);
+
+    const template = await prisma.messageTemplate.create({
+      data: {
+        tenantId,
+        name: body.name,
+        content: body.content,
+        channel: body.channel as any
+      }
+    });
+
+    res.json({ ok: true, template });
+  })
+);
+
+routes.patch(
+  '/message-templates/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const templateId = z.string().parse(req.params.id);
+    const body = z.object({
+      name: z.string().min(1).optional(),
+      content: z.string().min(1).optional(),
+      isActive: z.boolean().optional()
+    }).parse(req.body);
+
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id: templateId, tenantId }
+    });
+    if (!template) throw new Error('Template not found');
+
+    await prisma.messageTemplate.update({
+      where: { id: templateId },
+      data: body
+    });
+
+    res.json({ ok: true });
+  })
+);
+
+// Send message (manual/logged)
+routes.post(
+  '/leads/:id/send-message',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+    const body = z.object({
+      channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+      content: z.string().min(1).max(5000)
+    }).parse(req.body);
+
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
+    if (!lead) throw new Error('Lead not found');
+
+    // Check salesman access
+    if (role === 'SALESMAN') {
+      const salesman = await prisma.salesman.findFirst({ where: { tenantId, userId } });
+      if (!salesman || lead.assignedToSalesmanId !== salesman.id) {
+        throw new Error('Forbidden');
+      }
+    }
+
+    // Log as outbound message
+    const message = await prisma.message.create({
+      data: {
+        tenantId,
+        leadId,
+        direction: 'OUT',
+        channel: body.channel as any,
+        body: body.content
+      }
+    });
+
+    // Create event
+    await prisma.leadEvent.create({
+      data: {
+        tenantId,
+        leadId,
+        type: 'MESSAGE_SENT',
+        payload: { messageId: message.id, channel: body.channel, userId }
+      }
+    });
+
+    // Update lead status if NEW
+    if (lead.status === 'NEW') {
+      await prisma.lead.update({
+        where: { id: leadId },
+        data: { status: 'CONTACTED' }
+      });
+    }
+
+    res.json({ ok: true, message: { id: message.id, createdAt: message.createdAt.toISOString() } });
+  })
+);
+
 // AI stubs (MOCK) – will be used by WhatsApp ingestion pipeline later.
 routes.post(
   '/ai/triage',
