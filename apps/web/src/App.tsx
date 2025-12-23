@@ -2,6 +2,7 @@
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
+import { Dashboard } from './components/Dashboard'
 import {
   authMode,
   assignLead,
@@ -16,7 +17,6 @@ import {
   exportLeadsCsv,
   getActivityFeed,
   getAuditLogs,
-  getDashboardStats,
   getUnreadNotificationCount,
   getSuccessAnalytics,
   getAiConfig,
@@ -953,130 +953,7 @@ function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (
 }
 
 function DashboardPage({ onError }: { onError: (m: string) => void }) {
-  const [stats, setStats] = useState<any | null>(null)
-
-  async function refresh() {
-    try {
-      const data = await getDashboardStats()
-      setStats(data)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed to load dashboard')
-    }
-  }
-
-  useEffect(() => {
-    refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  if (!stats) return <div style={{ padding: 12 }}>Loading dashboard...</div>
-
-  return (
-    <div style={{ padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>Dashboard</h2>
-        <button onClick={refresh}>Refresh</button>
-      </div>
-
-      {/* Key metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{stats.totalLeads}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Total Leads</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#f59e0b' }}>{stats.newLeads}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>New Leads</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#8b5cf6' }}>{stats.activeLeads}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Active Leads</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#10b981' }}>{stats.convertedLeads}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Converted</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{stats.totalTriageOpen}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Open Triage</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#6366f1' }}>{stats.totalSalesmen}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Salesmen</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-        {/* Leads by status */}
-        <div className="sak-card" style={{ padding: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Leads by Status</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(stats.leadsByStatus ?? []).map((x: any) => (
-              <div key={x.status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 14 }}>{x.status}</span>
-                <Badge kind="muted" text={String(x.count)} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Leads by heat */}
-        <div className="sak-card" style={{ padding: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Leads by Heat</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(stats.leadsByHeat ?? []).map((x: any) => (
-              <div key={x.heat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 14 }}>{x.heat}</span>
-                <Badge
-                  kind={
-                    x.heat === 'ON_FIRE' || x.heat === 'VERY_HOT'
-                      ? 'danger'
-                      : x.heat === 'HOT'
-                      ? 'warn'
-                      : x.heat === 'WARM'
-                      ? 'ok'
-                      : 'muted'
-                  }
-                  text={String(x.count)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Leads by channel */}
-        <div className="sak-card" style={{ padding: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Leads by Channel</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(stats.leadsByChannel ?? []).map((x: any) => (
-              <div key={x.channel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 14 }}>{x.channel}</span>
-                <Badge kind="muted" text={String(x.count)} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent success events */}
-      {stats.recentSuccessEvents && stats.recentSuccessEvents.length > 0 && (
-        <div className="sak-card" style={{ padding: 16, marginTop: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Recent Wins (Last 7 Days)</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {stats.recentSuccessEvents.map((ev: any) => (
-              <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: 6 }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{ev.definition?.name ?? ev.type}</div>
-                  <div style={{ fontSize: 13, opacity: 0.8 }}>{ev.lead?.fullName ?? ev.lead?.phone ?? 'Unknown lead'}</div>
-                </div>
-                <Badge kind="ok" text={`+${ev.definition?.weight ?? 0}`} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  return <Dashboard onError={onError} />
 }
 
 function LeadsPage({ onError }: { onError: (m: string) => void }) {
