@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Activity, CheckCircle, AlertCircle, Briefcase, 
   TrendingUp, Flame, MessageSquare, Phone, Mail, BarChart3, 
@@ -309,11 +309,19 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
 
-  // Fetch stats
-  useState(() => {
+  // Fetch stats on mount
+  useEffect(() => {
     getDashboardStats()
       .then(data => {
-        setStats(data as DashboardStats)
+        setStats({
+          totalLeads: data.totalLeads || 0,
+          newLeads: data.newLeads || 0,
+          activeLeads: data.activeLeads || 0,
+          convertedLeads: data.convertedLeads || 0,
+          totalTriageOpen: data.totalTriageOpen || 0,
+          totalSalesmen: data.totalSalesmen || 0,
+          recentActivity: data.recentActivity || []
+        })
         setLoading(false)
       })
       .catch(err => {
@@ -321,7 +329,7 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
         onError?.(err.message)
         setLoading(false)
       })
-  })
+  }, [onError])
 
   if (loading) {
     return (
@@ -436,10 +444,11 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             </Button2025>
           </div>
           <div className="space-y-3">
-            {stats.recentActivity.slice(0, 5).map((activity) => (
-              <ActivityCard key={activity.id} {...activity} />
-            ))}
-            {stats.recentActivity.length === 0 && (
+            {stats.recentActivity && stats.recentActivity.length > 0 ? (
+              stats.recentActivity.slice(0, 5).map((activity) => (
+                <ActivityCard key={activity.id} {...activity} />
+              ))
+            ) : (
               <p className="text-center text-slate-400 py-8">No recent activity</p>
             )}
           </div>
