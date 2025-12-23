@@ -2,20 +2,21 @@ import requests
 import hmac
 import hashlib
 import json
+import time
 
 # Test payload - exact format
 payload = {
     "event": "message.received",
-    "sessionId": "66522fff-614c-4307-9bd7-0a38c5ee13d9",
-    "from_number": "9876543210",
-    "text": "Hello from WhatsApp test",
+    "sessionId": "b41a47f9-b58f-4aaa-9af0-2f7c65e7e95a",
+    "from_number": "917737845253",
+    "text": "Test message from new WhatsApp session",
     "pushName": "Test User",
-    "messageId": "test_msg_123",
-    "timestamp": 1703328000
+    "messageId": "test_msg_" + str(int(time.time())),
+    "timestamp": int(time.time())
 }
 
 # Calculate signature using the exact JSON string that will be sent
-webhook_secret = "8bb6c4ecd3720a6a811f3055e168a5ac4494a2a96bd8c5e4fd0e7e029dc1168d"
+webhook_secret = "b39c29c41efe4215ed8bb69db17147e1922bdd574b185c3965f0d6b9f561b3e9"
 payload_bytes = json.dumps(payload).encode('utf-8')
 signature = hmac.new(
     webhook_secret.encode('utf-8'),
