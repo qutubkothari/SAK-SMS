@@ -2,7 +2,7 @@
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
-import { Dashboard2025 } from './components/Dashboard2025'
+import { Dashboard } from './components/Dashboard'
 import {
   authMode,
   assignLead,
@@ -953,7 +953,7 @@ function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (
 }
 
 function DashboardPage({ onError }: { onError: (m: string) => void }) {
-  return <Dashboard2025 onError={onError} />
+  return <Dashboard onError={onError} />
 }
 
 function LeadsPage({ onError }: { onError: (m: string) => void }) {
