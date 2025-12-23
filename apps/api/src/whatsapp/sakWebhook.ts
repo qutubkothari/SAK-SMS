@@ -71,10 +71,10 @@ sakWebhookRouter.post(
     // Forward to the existing ingest endpoint
     const ingestUrl = `http://localhost:${process.env.PORT || 4000}/webhooks/ingest/message`;
     
-    // Get the first active tenant (or you can add session-to-tenant mapping later)
-    const tenant = await prisma.tenant.findFirst({ where: { isActive: true } });
+    // Get the first tenant (or you can add session-to-tenant mapping later)
+    const tenant = await prisma.tenant.findFirst();
     if (!tenant) {
-      console.error('No active tenant found');
+      console.error('No tenant found');
       res.json({ ok: true });
       return;
     }
