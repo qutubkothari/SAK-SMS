@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../http.js';
+import { prisma } from '../db.js';
 
 type SakWebhookEvent = {
   event: string;
@@ -70,6 +71,14 @@ sakWebhookRouter.post(
     // Forward to the existing ingest endpoint
     const ingestUrl = `http://localhost:${process.env.PORT || 4000}/webhooks/ingest/message`;
     
+    // Get the first active tenant (or you can add session-to-tenant mapping later)
+    const tenant = await prisma.tenant.findFirst({ where: { isActive: true } });
+    if (!tenant) {
+      console.error('No active tenant found');
+      res.json({ ok: true });
+      return;
+    }
+    
     try {
       const ingestResponse = await fetch(ingestUrl, {
         method: 'POST',
@@ -78,7 +87,7 @@ sakWebhookRouter.post(
           'x-webhook-secret': process.env.WEBHOOK_SECRET || 'dev-webhook-secret',
         },
         body: JSON.stringify({
-          tenantId: '1', // Default tenant - can be configured per session later
+          tenantId: tenant.id,
           channel: 'WHATSAPP',
           phone: phoneNumber,
           fullName: senderName || undefined,
