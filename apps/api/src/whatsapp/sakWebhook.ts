@@ -79,6 +79,8 @@ sakWebhookRouter.post(
       return;
     }
     
+    console.log(`Using tenant: ${tenant.id} (${tenant.name})`);
+    
     try {
       const ingestResponse = await fetch(ingestUrl, {
         method: 'POST',
