@@ -3619,61 +3619,69 @@ function App() {
 
   return (
     <>
-      <AppLayout
-        session={session}
-        onLoggedOut={() => {
-          setSession({ loading: false, user: null })
-        }}
-      >
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
-          <div style={{ padding: 12 }}>
-            {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
-            {toast ? (
-              <div
-                className="sak-card"
-                style={{
-                  padding: 12,
-                  background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
+      <Routes>
+        {/* Login Route - No Layout */}
+        <Route
+          path="/login"
+          element={
+            authMode() === 'dev_headers' ? (
+              <Navigate to="/" replace />
+            ) : (
+              <LoginPage
+                onError={onError}
+                onLoggedIn={(u) => {
+                  setSession({ loading: false, user: u })
                 }}
-              >
-                {toast.message}
-              </div>
-            ) : null}
-          </div>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              authMode() === 'dev_headers' ? (
-                <Navigate to="/" replace />
-              ) : (
-                <LoginPage
-                  onError={onError}
-                  onLoggedIn={(u) => {
-                    setSession({ loading: false, user: u })
-                  }}
-                />
-              )
-            }
-          />
+              />
+            )
+          }
+        />
 
-          <Route
-            path="/"
-            element={
-              <RequireAuth session={session}>
-                <DashboardPage onError={onError} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/leads"
-            element={
-              <RequireAuth session={session}>
-                <LeadsPage onError={onError} />
-              </RequireAuth>
-            }
-          />
-          <Route
+        {/* Dashboard Route - 2025 Layout (no AppLayout wrapper) */}
+        <Route
+          path="/"
+          element={
+            <RequireAuth session={session}>
+              <DashboardPage onError={onError} />
+            </RequireAuth>
+          }
+        />
+
+        {/* All Other Routes - Wrapped in Old AppLayout */}
+        <Route
+          path="/*"
+          element={
+            <AppLayout
+              session={session}
+              onLoggedOut={() => {
+                setSession({ loading: false, user: null })
+              }}
+            >
+              <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
+                <div style={{ padding: 12 }}>
+                  {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
+                  {toast ? (
+                    <div
+                      className="sak-card"
+                      style={{
+                        padding: 12,
+                        background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
+                      }}
+                    >
+                      {toast.message}
+                    </div>
+                  ) : null}
+                </div>
+                <Routes>
+                  <Route
+                    path="/leads"
+                    element={
+                      <RequireAuth session={session}>
+                        <LeadsPage onError={onError} />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
             path="/triage"
             element={
               <RequireAuth session={session}>
@@ -3762,8 +3770,11 @@ function App() {
             }
           />
         </Routes>
-        </div>
-      </AppLayout>
+              </div>
+            </AppLayout>
+          }
+        />
+      </Routes>
     </>
   )
 }
