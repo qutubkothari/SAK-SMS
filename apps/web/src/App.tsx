@@ -2,6 +2,7 @@
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
+import { Leads2025 } from './components/Leads2025'
 import { Dashboard } from './components/Dashboard'
 import {
   authMode,
@@ -957,6 +958,37 @@ function DashboardPage({ onError }: { onError: (m: string) => void }) {
 }
 
 function LeadsPage({ onError }: { onError: (m: string) => void }) {
+  const [leads, setLeads] = useState<any[]>([])
+
+  async function refresh() {
+    try {
+      const out = await listLeads()
+      setLeads(out.leads)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      await exportLeadsCsv()
+      onError('Export started')
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Export failed')
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return <Leads2025 leads={leads} onRefresh={refresh} onExport={handleExport} />
+}
+
+// Keep old implementation for reference (DEPRECATED - remove after testing)
+// @ts-ignore
+function LeadsPageOld({ onError }: { onError: (m: string) => void }) {
   const { t } = useTranslation()
   const [leads, setLeads] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
