@@ -68,23 +68,21 @@ sakWebhookRouter.post(
     }
 
     // Forward to the existing ingest endpoint
-    const ingestUrl = `http://localhost:${process.env.PORT || 3000}/api/ingest/message`;
+    const ingestUrl = `http://localhost:${process.env.PORT || 4000}/api/webhooks/ingest/message`;
     
     try {
       const ingestResponse = await fetch(ingestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-webhook-secret': process.env.WEBHOOK_SECRET || 'dev-webhook-secret',
         },
         body: JSON.stringify({
-          source: 'whatsapp',
-          phoneNumber,
-          message,
-          metadata: {
-            senderName,
-            messageId: payload.messageId,
-            timestamp: payload.timestamp,
-          },
+          channel: 'WHATSAPP',
+          phone: phoneNumber,
+          fullName: senderName || undefined,
+          customerMessage: message,
+          externalId: payload.messageId,
         }),
       });
 
