@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-rou
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
 import { Dashboard2025 } from './components/Dashboard2025'
+import { AppLayout2025 } from './components/AppLayout2025'
 import {
   authMode,
   assignLead,
@@ -110,6 +111,9 @@ function useToast() {
   return { toast, setToast }
 }
 
+// OLD LAYOUT - DEPRECATED - Kept for reference only
+// @ts-ignore - unused
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function AppLayout({ session, onLoggedOut, children }: { session: SessionState; onLoggedOut: () => void; children: React.ReactNode }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -899,6 +903,9 @@ function IngestPage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
   )
 }
 
+// DEV SETUP - DEPRECATED
+// @ts-ignore - unused
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (m: string) => void }) {
   const [tenantName, setTenantName] = useState('Demo Tenant')
   const [email, setEmail] = useState('manager@demo.local')
@@ -3637,141 +3644,48 @@ function App() {
           }
         />
 
-        {/* Dashboard Route - 2025 Layout (no AppLayout wrapper) */}
-        <Route
-          path="/"
-          element={
-            <RequireAuth session={session}>
-              <DashboardPage onError={onError} />
-            </RequireAuth>
-          }
-        />
-
-        {/* All Other Routes - Wrapped in Old AppLayout */}
+        {/* All Authenticated Routes - Wrapped in AppLayout2025 */}
         <Route
           path="/*"
           element={
-            <AppLayout
-              session={session}
-              onLoggedOut={() => {
-                setSession({ loading: false, user: null })
-              }}
-            >
-              <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
-                <div style={{ padding: 12 }}>
-                  {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
-                  {toast ? (
-                    <div
-                      className="sak-card"
-                      style={{
-                        padding: 12,
-                        background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
-                      }}
-                    >
+            <RequireAuth session={session}>
+              <AppLayout2025
+                user={session.user}
+                onLogout={() => {
+                  logout().catch(() => undefined)
+                  setSession({ loading: false, user: null })
+                }}
+              >
+                {/* Toast Notification */}
+                {toast && (
+                  <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+                    <div className={`px-6 py-4 rounded-2xl shadow-soft-lg backdrop-blur-md ${
+                      toast.kind === 'error' 
+                        ? 'bg-red-100/90 text-red-900 border border-red-200' 
+                        : 'bg-mint-100/90 text-mint-900 border border-mint-200'
+                    }`}>
                       {toast.message}
                     </div>
-                  ) : null}
-                </div>
+                  </div>
+                )}
+                
                 <Routes>
-                  <Route
-                    path="/leads"
-                    element={
-                      <RequireAuth session={session}>
-                        <LeadsPage onError={onError} />
-                      </RequireAuth>
-                    }
-                  />
-                  <Route
-            path="/triage"
-            element={
-              <RequireAuth session={session}>
-                <TriagePage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/salesmen"
-            element={
-              <RequireAuth session={session}>
-                <SalesmenPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <RequireAuth session={session}>
-                <ReportsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/activity-feed"
-            element={
-              <RequireAuth session={session}>
-                <ActivityFeedPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/audit-logs"
-            element={
-              <RequireAuth session={session}>
-                <AuditLogsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/success"
-            element={
-              <RequireAuth session={session}>
-                <SuccessPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <RequireAuth session={session}>
-                <SettingsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/ai"
-            element={
-              <RequireAuth session={session}>
-                <AiPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/leads/:id"
-            element={
-              <RequireAuth session={session}>
-                <LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/bots"
-            element={
-              <RequireAuth session={session}>
-                <BotsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/ingest"
-            element={
-              <RequireAuth session={session}>
-                <IngestPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-        </Routes>
-              </div>
-            </AppLayout>
+                  <Route path="/" element={<DashboardPage onError={onError} />} />
+                  <Route path="/leads" element={<LeadsPage onError={onError} />} />
+                  <Route path="/triage" element={<TriagePage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/salesmen" element={<SalesmenPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/reports" element={<ReportsPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/activity-feed" element={<ActivityFeedPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/audit-logs" element={<AuditLogsPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/success" element={<SuccessPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/settings" element={<SettingsPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/ai" element={<AiPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/leads/:id" element={<LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />} />
+                  <Route path="/bots" element={<BotsPage onError={onError} onInfo={onInfo} />} />
+                  <Route path="/ingest" element={<IngestPage onError={onError} onInfo={onInfo} />} />
+                </Routes>
+              </AppLayout2025>
+            </RequireAuth>
           }
         />
       </Routes>
