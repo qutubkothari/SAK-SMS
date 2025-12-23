@@ -110,16 +110,17 @@ function useToast() {
   return { toast, setToast }
 }
 
-function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: () => void }) {
+function AppLayout({ session, onLoggedOut, children }: { session: SessionState; onLoggedOut: () => void; children: React.ReactNode }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const [auth, setAuth] = useState(loadDevAuth())
-  const isArabic = i18n.language === 'ar'
-  const mode = authMode()
-
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [auth, setAuth] = useState(() => loadDevAuth())
+  const mode = authMode()
+  const isArabic = i18n.language === 'ar'
 
   async function refreshUnreadCount() {
     try {
@@ -157,77 +158,125 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
     document.documentElement.dir = isArabic ? 'rtl' : 'ltr'
   }, [i18n.language, isArabic])
 
+  const navItems = [
+    { to: '/', label: 'Dashboard', icon: '📊' },
+    { to: '/leads', label: t('leads'), icon: '👥' },
+    { to: '/triage', label: t('triage'), icon: '🎯' },
+    { to: '/salesmen', label: 'Salesmen', icon: '👔' },
+    { to: '/reports', label: 'Reports', icon: '📈' },
+    { to: '/activity-feed', label: 'Activity', icon: '⚡' },
+    ...(session.user?.role === 'ADMIN' ? [{ to: '/audit-logs', label: 'Audit', icon: '🔍' }] : []),
+    { to: '/success', label: 'Success', icon: '🎉' },
+    { to: '/settings', label: 'Settings', icon: '⚙️' },
+    { to: '/ai', label: 'AI', icon: '🤖' },
+    { to: '/bots', label: 'Bots', icon: '🔧' },
+    { to: '/ingest', label: 'Ingest', icon: '📥' },
+  ]
+
+  if (mode !== 'dev_headers' && !session.user) {
+    return (
+      <div className="sak-layout-simple">
+        {children}
+      </div>
+    )
+  }
+
   return (
-    <div className="sak-topbar">
-      <div className="sak-topbar__inner">
-        <div className="sak-topbar__nav">
-          <strong className="sak-topbar__title">{t('appTitle')}</strong>
-          {mode === 'dev_headers' || session.user ? (
-            <>
-              <Link to="/">Dashboard</Link>
-              <Link to="/leads">{t('leads')}</Link>
-              <Link to="/triage">{t('triage')}</Link>
-              <Link to="/salesmen">Salesmen</Link>
-              <Link to="/reports">Reports</Link>
-              <Link to="/activity-feed">Activity</Link>
-              {session.user?.role === 'ADMIN' && <Link to="/audit-logs">Audit</Link>}
-              <Link to="/success">Success</Link>
-              <Link to="/settings">Settings</Link>
-              <Link to="/ai">AI</Link>
-              <Link to="/bots">Bots</Link>
-              <Link to="/ingest">Ingest</Link>
-            </>
-          ) : (
-            <Link to="/login">Login</Link>
-          )}
+    <div className="sak-layout">
+      {/* Sidebar */}
+      <aside className={`sak-sidebar ${sidebarCollapsed ? 'sak-sidebar--collapsed' : ''}`}>
+        <div className="sak-sidebar__header">
+          <div className="sak-sidebar__logo">
+            <span className="sak-sidebar__logo-icon">🎯</span>
+            {!sidebarCollapsed && <span className="sak-sidebar__logo-text">{t('appTitle')}</span>}
+          </div>
+          <button 
+            className="sak-sidebar__toggle"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
         </div>
 
-        <div className="sak-topbar__spacer" />
+        <nav className="sak-sidebar__nav">
+          {navItems.map(item => (
+            <Link 
+              key={item.to}
+              to={item.to} 
+              className="sak-sidebar__link"
+              title={sidebarCollapsed ? item.label : undefined}
+            >
+              <span className="sak-sidebar__link-icon">{item.icon}</span>
+              {!sidebarCollapsed && <span className="sak-sidebar__link-text">{item.label}</span>}
+            </Link>
+          ))}
+        </nav>
 
-        <div className="sak-topbar__controls">
-          <label className="sak-topbar__field">
-            <span className="sak-topbar__label">{t('language')}</span>
-            <select value={i18n.language} onChange={(e) => i18n.changeLanguage(e.target.value)}>
-              <option value="en">EN</option>
-              <option value="ar">AR</option>
+        {mode === 'dev_headers' && !sidebarCollapsed && (
+          <div className="sak-sidebar__dev">
+            <div className="sak-sidebar__dev-title">Dev Mode</div>
+            <label className="sak-sidebar__dev-field">
+              <span>Tenant ID</span>
+              <input value={auth.tenantId} onChange={(e) => setAuth({ ...auth, tenantId: e.target.value })} />
+            </label>
+            <label className="sak-sidebar__dev-field">
+              <span>User ID</span>
+              <input value={auth.userId} onChange={(e) => setAuth({ ...auth, userId: e.target.value })} />
+            </label>
+            <label className="sak-sidebar__dev-field">
+              <span>Role</span>
+              <select value={auth.role} onChange={(e) => setAuth({ ...auth, role: e.target.value as any })}>
+                <option value="MANAGER">MANAGER</option>
+                <option value="SALESMAN">SALESMAN</option>
+                <option value="ADMIN">ADMIN</option>
+                <option value="OWNER">OWNER</option>
+              </select>
+            </label>
+            <button
+              className="sak-sidebar__dev-save"
+              onClick={() => {
+                saveDevAuth(auth)
+                navigate(0)
+              }}
+            >
+              {t('save')}
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="sak-main">
+        {/* Top Header */}
+        <header className="sak-header">
+          <div className="sak-header__spacer" />
+          
+          <div className="sak-header__actions">
+            {/* Language Selector */}
+            <select 
+              className="sak-header__select"
+              value={i18n.language} 
+              onChange={(e) => i18n.changeLanguage(e.target.value)}
+            >
+              <option value="en">🌐 EN</option>
+              <option value="ar">🌐 AR</option>
             </select>
-          </label>
 
-          {mode === 'dev_headers' || session.user ? (
+            {/* Notifications */}
             <div style={{ position: 'relative' }}>
               <button
+                className="sak-header__btn"
                 onClick={() => setNotificationsOpen((v) => !v)}
-                style={{
-                  padding: '10px 12px',
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
               >
-                <span>🔔</span>
-                <span>{t('notifications')}</span>
+                <span style={{ fontSize: '18px' }}>🔔</span>
                 {unreadCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      borderRadius: '10px',
-                      padding: '2px 6px',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      minWidth: '18px',
-                      textAlign: 'center'
-                    }}
-                  >
+                  <span className="sak-header__badge">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>
-              {notificationsOpen ? (
+              {notificationsOpen && (
                 <>
                   <div
                     style={{
@@ -238,7 +287,7 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
                     onClick={() => setNotificationsOpen(false)}
                   />
                   <div
-                    className="sak-card"
+                    className="sak-card sak-dropdown"
                     style={{
                       position: 'absolute',
                       right: 0,
@@ -248,7 +297,6 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
                       maxHeight: '70vh',
                       padding: 0,
                       zIndex: 9999,
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
                       overflow: 'hidden',
                       display: 'flex',
                       flexDirection: 'column'
@@ -430,54 +478,93 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
                     </div>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
-          ) : null}
 
-          {mode === 'dev_headers' ? (
-            <>
-              <label className="sak-topbar__field">
-                <span className="sak-topbar__label">{t('tenantId')}</span>
-                <input value={auth.tenantId} onChange={(e) => setAuth({ ...auth, tenantId: e.target.value })} style={{ width: 220 }} />
-              </label>
-              <label className="sak-topbar__field">
-                <span className="sak-topbar__label">{t('userId')}</span>
-                <input value={auth.userId} onChange={(e) => setAuth({ ...auth, userId: e.target.value })} style={{ width: 220 }} />
-              </label>
-              <label className="sak-topbar__field">
-                <span className="sak-topbar__label">{t('role')}</span>
-                <select value={auth.role} onChange={(e) => setAuth({ ...auth, role: e.target.value as any })}>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="SALESMAN">SALESMAN</option>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="OWNER">OWNER</option>
-                </select>
-              </label>
+            {/* User Menu */}
+            <div style={{ position: 'relative' }}>
               <button
-                onClick={() => {
-                  saveDevAuth(auth)
-                  navigate(0)
-                }}
+                className="sak-header__user"
+                onClick={() => setUserMenuOpen((v) => !v)}
               >
-                {t('save')}
+                <span className="sak-header__user-avatar">
+                  {session.user?.displayName?.[0]?.toUpperCase() || 'U'}
+                </span>
+                <span className="sak-header__user-name">
+                  {session.user?.displayName || 'User'}
+                </span>
               </button>
-            </>
-          ) : session.user ? (
-            <>
-              <Badge kind={'muted'} text={`TENANT ${session.user.tenantId}`} />
-              <Badge kind={'ok'} text={`${session.user.displayName} (${session.user.role})`} />
-              <button
-                onClick={async () => {
-                  await logout().catch(() => undefined)
-                  onLoggedOut()
-                  navigate('/login')
-                }}
-              >
-                Logout
-              </button>
-            </>
-          ) : null}
-        </div>
+              {userMenuOpen && (
+                <>
+                  <div
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      zIndex: 9998
+                    }}
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div
+                    className="sak-card sak-dropdown"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 'calc(100% + 8px)',
+                      width: 240,
+                      padding: '8px',
+                      zIndex: 9999
+                    }}
+                  >
+                    <div style={{ 
+                      padding: '12px', 
+                      borderBottom: '1px solid #e5e7eb',
+                      marginBottom: '8px'
+                    }}>
+                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                        {session.user?.displayName}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                        {session.user?.role}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await logout().catch(() => undefined)
+                        onLoggedOut()
+                        setUserMenuOpen(false)
+                        navigate('/login')
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        textAlign: 'left',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: '#ef4444',
+                        fontWeight: '500'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>🚪</span>
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="sak-content">
+          {children}
+        </main>
       </div>
     </div>
   )
@@ -3747,27 +3834,27 @@ function App() {
 
   return (
     <>
-      <TopBar
+      <AppLayout
         session={session}
         onLoggedOut={() => {
           setSession({ loading: false, user: null })
         }}
-      />
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
-        <div style={{ padding: 12 }}>
-          {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
-          {toast ? (
-            <div
-              className="sak-card"
-              style={{
-                padding: 12,
-                background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
-              }}
-            >
-              {toast.message}
-            </div>
-          ) : null}
-        </div>
+      >
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
+          <div style={{ padding: 12 }}>
+            {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
+            {toast ? (
+              <div
+                className="sak-card"
+                style={{
+                  padding: 12,
+                  background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
+                }}
+              >
+                {toast.message}
+              </div>
+            ) : null}
+          </div>
         <Routes>
           <Route
             path="/login"
@@ -3890,7 +3977,8 @@ function App() {
             }
           />
         </Routes>
-      </div>
+        </div>
+      </AppLayout>
     </>
   )
 }
