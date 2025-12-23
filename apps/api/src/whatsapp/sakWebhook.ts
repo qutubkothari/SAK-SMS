@@ -78,6 +78,7 @@ sakWebhookRouter.post(
           'x-webhook-secret': process.env.WEBHOOK_SECRET || 'dev-webhook-secret',
         },
         body: JSON.stringify({
+          tenantId: '1', // Default tenant - can be configured per session later
           channel: 'WHATSAPP',
           phone: phoneNumber,
           fullName: senderName || undefined,
