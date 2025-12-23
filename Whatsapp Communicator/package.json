@@ -1,0 +1,32 @@
+{
+  "name": "whatsapp-communicator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:clear": "tsx scripts/delete-all-data.ts",
+    "tenant:list": "tsx scripts/list-tenants.ts",
+    "tenant:upsert": "tsx scripts/upsert-tenant.ts",
+    "tenant:delete-all": "tsx scripts/delete-all-tenants.ts",
+    "deploy:ec2": "powershell -ExecutionPolicy Bypass -File scripts/deploy-ec2.ps1"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

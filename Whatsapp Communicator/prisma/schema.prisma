@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SakApiKeyMode {
+  session
+  user
+}
+
+model Tenant {
+  id            String       @id @default(cuid())
+  name          String
+  sessionId     String       @unique
+  apiKeyMode    SakApiKeyMode @default(session)
+  apiKey        String
+  phoneNumber   String?
+  webhookSecret String
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  inboundMessages InboundMessage[]
+}
+
+model InboundMessage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  sessionId  String
+  fromNumber String
+  waId       String?
+  text       String?
+  type       String?
+  timestamp  Int?
+  messageId  String?
+  pushName   String?
+  rawJson    String
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([sessionId, createdAt])
+}
