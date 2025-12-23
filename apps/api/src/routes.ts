@@ -181,16 +181,14 @@ routes.post(
   asyncHandler(async (req, res) => {
     const body = z
       .object({
-        tenantId: z.string().min(1),
-        email: z.string().email(),
+        phone: z.string().min(10),
         password: z.string().min(1)
       })
       .parse(req.body);
 
     const user = await prisma.user.findFirst({
       where: {
-        tenantId: body.tenantId,
-        email: body.email.toLowerCase(),
+        phone: body.phone,
         active: true
       }
     });

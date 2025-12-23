@@ -82,8 +82,7 @@ export type SessionUser = {
   displayName: string
 }
 
-export async function login(payload: { tenantId: string; email: string; password: string }) {
-  saveTenantId(payload.tenantId)
+export async function login(payload: { phone: string; password: string }) {
   return request<{ ok: true; user: SessionUser }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload)

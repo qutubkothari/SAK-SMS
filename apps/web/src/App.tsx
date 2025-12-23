@@ -33,7 +33,6 @@ import {
   importLeadsCsv,
   ingestMessage,
   listNotifications,
-  loadTenantId,
   listLeads,
   listBots,
   listSalesmen,
@@ -48,7 +47,6 @@ import {
   recomputeScores,
   recordLeadSuccess,
   saveDevAuth,
-  saveTenantId,
   reopenTriageItem,
   type Notification,
   type TriageStatusFilter,
@@ -487,8 +485,7 @@ function TopBar({ session, onLoggedOut }: { session: SessionState; onLoggedOut: 
 
 function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLoggedIn: (u: SessionUser) => void }) {
   const navigate = useNavigate()
-  const [tenantId, setTenantId] = useState(loadTenantId())
-  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
 
   return (
@@ -525,24 +522,12 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Tenant ID</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Mobile Number</span>
             <input
-              value={tenantId}
-              onChange={(e) => {
-                setTenantId(e.target.value)
-                saveTenantId(e.target.value)
-              }}
-              placeholder="Enter your tenant ID"
-              style={{ fontSize: 15 }}
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Email</span>
-            <input 
-              type="email"
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              placeholder="your.email@company.com" 
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="9537653927"
               style={{ fontSize: 15 }}
             />
           </label>
@@ -554,6 +539,11 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
               onChange={(e) => setPassword(e.target.value)} 
               placeholder="Enter your password" 
               style={{ fontSize: 15 }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  document.querySelector<HTMLButtonElement>('.primary')?.click()
+                }
+              }}
             />
           </label>
           <button
@@ -566,7 +556,7 @@ function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLo
             }}
             onClick={async () => {
               try {
-                const out = await login({ tenantId, email, password })
+                const out = await login({ phone, password })
                 onLoggedIn(out.user)
                 navigate('/')
               } catch (e) {
