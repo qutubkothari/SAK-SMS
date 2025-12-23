@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Activity, CheckCircle, AlertCircle, Briefcase, 
   TrendingUp, Flame, MessageSquare, Phone, Mail, BarChart3, 
-  Menu, X, Settings, Bell, Search, ChevronRight
+  ChevronRight, Bell, X
 } from 'lucide-react'
 import { getDashboardStats } from '../lib/api'
 
@@ -96,96 +96,6 @@ const BentoCard = ({ title, value, icon: Icon, gradient, trend, delay = 0 }: Ben
         )}
       </div>
     </div>
-  )
-}
-
-// Floating Island Navbar
-const FloatingNavbar = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  return (
-    <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-6xl animate-slide-up">
-      <div className="bg-white/70 backdrop-blur-md rounded-3xl px-6 py-4 shadow-soft-lg border border-white/20">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-mint-500 to-mint-600 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">S</span>
-            </div>
-            <span className="text-xl font-bold text-slate-900">SAK CRM</span>
-          </div>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-2">
-            <NavLink active>Dashboard</NavLink>
-            <NavLink>Leads</NavLink>
-            <NavLink>Triage</NavLink>
-            <NavLink>Reports</NavLink>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center space-x-3">
-            <button className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center hover:bg-white transition-colors">
-              <Search className="w-5 h-5 text-slate-600" />
-            </button>
-            <button className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center hover:bg-white transition-colors relative">
-              <Bell className="w-5 h-5 text-slate-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-lemon-500 rounded-full" />
-            </button>
-            <button className="w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center hover:bg-white transition-colors">
-              <Settings className="w-5 h-5 text-slate-600" />
-            </button>
-            
-            <button 
-              className="md:hidden w-10 h-10 rounded-xl bg-white/50 flex items-center justify-center"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden mt-4 pt-4 border-t border-slate-200 space-y-2 animate-fade-in">
-            <MobileNavLink active>Dashboard</MobileNavLink>
-            <MobileNavLink>Leads</MobileNavLink>
-            <MobileNavLink>Triage</MobileNavLink>
-            <MobileNavLink>Reports</MobileNavLink>
-          </div>
-        )}
-      </div>
-    </nav>
-  )
-}
-
-const NavLink = ({ children, active }: { children: React.ReactNode; active?: boolean }) => {
-  return (
-    <a 
-      href="#" 
-      className={`px-4 py-2 rounded-xl font-medium transition-all ${
-        active 
-          ? 'bg-mint-500 text-white shadow-mint-sm' 
-          : 'text-slate-600 hover:bg-white/50'
-      }`}
-    >
-      {children}
-    </a>
-  )
-}
-
-const MobileNavLink = ({ children, active }: { children: React.ReactNode; active?: boolean }) => {
-  return (
-    <a 
-      href="#" 
-      className={`block px-4 py-3 rounded-2xl font-medium transition-all ${
-        active 
-          ? 'bg-mint-500 text-white' 
-          : 'text-slate-600 hover:bg-white/50'
-      }`}
-    >
-      {children}
-    </a>
   )
 }
 
@@ -333,28 +243,23 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-mint-50 via-white to-lemon-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-mint-500 to-mint-600 animate-float" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-mint-50 via-white to-lemon-50">
-      {/* Floating Navbar */}
-      <FloatingNavbar />
-
-      {/* Main Content */}
-      <div className="pt-28 pb-12 px-4 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <h1 className="text-5xl font-bold text-slate-900 mb-2">
-            Welcome back! 👋
-          </h1>
-          <p className="text-lg text-slate-600">
-            Here's what's happening with your leads today.
-          </p>
-        </div>
+    <>
+      {/* Header */}
+      <div className="mb-8 animate-fade-in">
+        <h1 className="text-5xl font-bold text-slate-900 mb-2">
+          Welcome back! 👋
+        </h1>
+        <p className="text-lg text-slate-600">
+          Here's what's happening with your leads today.
+        </p>
+      </div>
 
         {/* Bento Grid Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -466,7 +371,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             Open Modal
           </Button2025>
         </div>
-      </div>
 
       {/* Enterprise Modal */}
       <EnterpriseModal
@@ -476,6 +380,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
       >
         <p>This is an enterprise-grade modal with a clean, modern design. The backdrop uses a frosted glass effect for a premium feel.</p>
       </EnterpriseModal>
-    </div>
+    </>
   )
 }
