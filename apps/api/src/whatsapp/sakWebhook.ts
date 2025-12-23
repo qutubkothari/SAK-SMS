@@ -68,7 +68,7 @@ sakWebhookRouter.post(
     }
 
     // Forward to the existing ingest endpoint
-    const ingestUrl = `http://localhost:${process.env.PORT || 4000}/api/webhooks/ingest/message`;
+    const ingestUrl = `http://localhost:${process.env.PORT || 4000}/webhooks/ingest/message`;
     
     try {
       const ingestResponse = await fetch(ingestUrl, {
