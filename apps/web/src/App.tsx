@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+﻿import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { LoginPage } from './components/LoginPage'
 import {
   authMode,
   assignLead,
@@ -38,7 +39,6 @@ import {
   listSalesmen,
   listSuccessDefinitions,
   listTriage,
-  login,
   loadDevAuth,
   logout,
   markAllNotificationsRead,
@@ -159,18 +159,18 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
   }, [i18n.language, isArabic])
 
   const navItems = [
-    { to: '/', label: 'Dashboard', icon: '📊' },
-    { to: '/leads', label: t('leads'), icon: '👥' },
-    { to: '/triage', label: t('triage'), icon: '🎯' },
-    { to: '/salesmen', label: 'Salesmen', icon: '👔' },
-    { to: '/reports', label: 'Reports', icon: '📈' },
-    { to: '/activity-feed', label: 'Activity', icon: '⚡' },
-    ...(session.user?.role === 'ADMIN' ? [{ to: '/audit-logs', label: 'Audit', icon: '🔍' }] : []),
-    { to: '/success', label: 'Success', icon: '🎉' },
-    { to: '/settings', label: 'Settings', icon: '⚙️' },
-    { to: '/ai', label: 'AI', icon: '🤖' },
-    { to: '/bots', label: 'Bots', icon: '🔧' },
-    { to: '/ingest', label: 'Ingest', icon: '📥' },
+    { to: '/', label: 'Dashboard', icon: 'ðŸ“Š' },
+    { to: '/leads', label: t('leads'), icon: 'ðŸ‘¥' },
+    { to: '/triage', label: t('triage'), icon: 'ðŸŽ¯' },
+    { to: '/salesmen', label: 'Salesmen', icon: 'ðŸ‘”' },
+    { to: '/reports', label: 'Reports', icon: 'ðŸ“ˆ' },
+    { to: '/activity-feed', label: 'Activity', icon: 'âš¡' },
+    ...(session.user?.role === 'ADMIN' ? [{ to: '/audit-logs', label: 'Audit', icon: 'ðŸ”' }] : []),
+    { to: '/success', label: 'Success', icon: 'ðŸŽ‰' },
+    { to: '/settings', label: 'Settings', icon: 'âš™ï¸' },
+    { to: '/ai', label: 'AI', icon: 'ðŸ¤–' },
+    { to: '/bots', label: 'Bots', icon: 'ðŸ”§' },
+    { to: '/ingest', label: 'Ingest', icon: 'ðŸ“¥' },
   ]
 
   if (mode !== 'dev_headers' && !session.user) {
@@ -187,7 +187,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
       <aside className={`sak-sidebar ${sidebarCollapsed ? 'sak-sidebar--collapsed' : ''}`}>
         <div className="sak-sidebar__header">
           <div className="sak-sidebar__logo">
-            <span className="sak-sidebar__logo-icon">🎯</span>
+            <span className="sak-sidebar__logo-icon">ðŸŽ¯</span>
             {!sidebarCollapsed && <span className="sak-sidebar__logo-text">{t('appTitle')}</span>}
           </div>
           <button 
@@ -195,7 +195,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? 'Expand' : 'Collapse'}
           >
-            {sidebarCollapsed ? '→' : '←'}
+            {sidebarCollapsed ? 'â†’' : 'â†'}
           </button>
         </div>
 
@@ -259,8 +259,8 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
               value={i18n.language} 
               onChange={(e) => i18n.changeLanguage(e.target.value)}
             >
-              <option value="en">🌐 EN</option>
-              <option value="ar">🌐 AR</option>
+              <option value="en">ðŸŒ EN</option>
+              <option value="ar">ðŸŒ AR</option>
             </select>
 
             {/* Notifications */}
@@ -269,7 +269,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                 className="sak-header__btn"
                 onClick={() => setNotificationsOpen((v) => !v)}
               >
-                <span style={{ fontSize: '18px' }}>🔔</span>
+                <span style={{ fontSize: '18px' }}>ðŸ””</span>
                 {unreadCount > 0 && (
                   <span className="sak-header__badge">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -346,7 +346,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                             opacity: 0.6
                           }}
                         >
-                          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔕</div>
+                          <div style={{ fontSize: '48px', marginBottom: '12px' }}>ðŸ”•</div>
                           <div style={{ fontWeight: '600', marginBottom: '4px' }}>
                             {t('noNotifications')}
                           </div>
@@ -358,13 +358,13 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                             const isUnread = !n.readAt
                             const getNotificationIcon = (title: string) => {
                               const t = title.toLowerCase()
-                              if (t.includes('lead')) return '👤'
-                              if (t.includes('task')) return '✓'
-                              if (t.includes('call')) return '📞'
-                              if (t.includes('message')) return '💬'
-                              if (t.includes('success') || t.includes('won')) return '🎉'
-                              if (t.includes('urgent') || t.includes('hot')) return '🔥'
-                              return '📢'
+                              if (t.includes('lead')) return 'ðŸ‘¤'
+                              if (t.includes('task')) return 'âœ“'
+                              if (t.includes('call')) return 'ðŸ“ž'
+                              if (t.includes('message')) return 'ðŸ’¬'
+                              if (t.includes('success') || t.includes('won')) return 'ðŸŽ‰'
+                              if (t.includes('urgent') || t.includes('hot')) return 'ðŸ”¥'
+                              return 'ðŸ“¢'
                             }
                             return (
                               <div
@@ -466,7 +466,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                                         flexShrink: 0
                                       }}
                                     >
-                                      ✓
+                                      âœ“
                                     </button>
                                   )}
                                 </div>
@@ -551,7 +551,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <span>🚪</span>
+                      <span>ðŸšª</span>
                       <span>Logout</span>
                     </button>
                   </div>
@@ -570,101 +570,9 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
   )
 }
 
-function LoginPage({ onError, onLoggedIn }: { onError: (m: string) => void; onLoggedIn: (u: SessionUser) => void }) {
-  const navigate = useNavigate()
-  const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
-
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      padding: '20px'
-    }}>
-      <div className="sak-card" style={{ 
-        padding: '48px 40px', 
-        maxWidth: 440, 
-        width: '100%',
-        boxShadow: 'var(--shadow-xl)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ 
-            fontSize: '32px', 
-            fontWeight: 700, 
-            marginBottom: 8,
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            color: 'transparent',
-            display: 'inline-block'
-          }}>
-            SAK CRM
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
-            Sign in to your account
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Mobile Number</span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="9537653927"
-              style={{ fontSize: 15 }}
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>Password</span>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              placeholder="Enter your password" 
-              style={{ fontSize: 15 }}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  document.querySelector<HTMLButtonElement>('.primary')?.click()
-                }
-              }}
-            />
-          </label>
-          <button
-            className="primary"
-            style={{ 
-              marginTop: 8,
-              padding: '14px 20px',
-              fontSize: 15,
-              fontWeight: 600
-            }}
-            onClick={async () => {
-              try {
-                const out = await login({ phone, password })
-                onLoggedIn(out.user)
-                navigate('/')
-              } catch (e) {
-                onError(e instanceof Error ? e.message : 'Login failed')
-              }
-            }}
-          >
-            Sign In
-          </button>
-        </div>
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          If you don’t know your Tenant ID, ask your admin.
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function RequireAuth({ session, children }: { session: SessionState; children: ReactElement }) {
   if (authMode() === 'dev_headers') return children
-  if (session.loading) return <div style={{ padding: 12 }}>Loading…</div>
+  if (session.loading) return <div style={{ padding: 12 }}>Loadingâ€¦</div>
   if (!session.user) return <Navigate to="/login" replace />
   return children
 }
@@ -984,7 +892,7 @@ function IngestPage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
           </button>
         </div>
         <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-          This stores IN/OUT messages in DB and triggers AI triage + draft reply. If pricing isn’t allowed, it escalates to triage.
+          This stores IN/OUT messages in DB and triggers AI triage + draft reply. If pricing isnâ€™t allowed, it escalates to triage.
         </div>
       </div>
     </div>
@@ -1407,10 +1315,10 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
 
           <select value={qualificationFilter} onChange={(e) => setQualificationFilter(e.target.value)}>
             <option value="ALL">All Qualification</option>
-            <option value="HOT">🔥 HOT</option>
-            <option value="WARM">🌡️ WARM</option>
-            <option value="QUALIFIED">✓ QUALIFIED</option>
-            <option value="COLD">❄️ COLD</option>
+            <option value="HOT">ðŸ”¥ HOT</option>
+            <option value="WARM">ðŸŒ¡ï¸ WARM</option>
+            <option value="QUALIFIED">âœ“ QUALIFIED</option>
+            <option value="COLD">â„ï¸ COLD</option>
           </select>
 
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -1425,7 +1333,7 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
             style={{ padding: '0.5rem', minWidth: '40px' }}
             title={`Sort ${sortOrder === 'asc' ? 'Ascending' : 'Descending'}`}
           >
-            {sortOrder === 'asc' ? '↑' : '↓'}
+            {sortOrder === 'asc' ? 'â†‘' : 'â†“'}
           </button>
 
           {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || channelFilter !== 'ALL' || qualificationFilter !== 'ALL') && (
@@ -1540,7 +1448,7 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
                     )}
                   </div>
                 ) : (
-                  <span style={{ opacity: 0.5 }}>—</span>
+                  <span style={{ opacity: 0.5 }}>â€”</span>
                 )}
               </td>
               <td style={{ opacity: l.assignedToSalesmanId ? 1 : 0.5 }}>
@@ -1684,7 +1592,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     return items.sort((a, b) => b.time.getTime() - a.time.getTime())
   }, [lead, calls])
 
-  if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
+  if (!lead) return <div style={{ padding: 12 }}>Loadingâ€¦</div>
 
   return (
     <>
@@ -1711,7 +1619,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>Send Message</h3>
-              <button onClick={() => setShowMessageModal(false)}>✕</button>
+              <button onClick={() => setShowMessageModal(false)}>âœ•</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -1798,7 +1706,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>Log Call</h3>
-              <button onClick={() => setShowCallModal(false)}>✕</button>
+              <button onClick={() => setShowCallModal(false)}>âœ•</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -1910,7 +1818,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h3>
-              <button onClick={() => setShowTaskModal(false)}>✕</button>
+              <button onClick={() => setShowTaskModal(false)}>âœ•</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -2079,7 +1987,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             onClick={() => setShowMessageModal(true)}
             style={{ fontSize: 14 }}
           >
-            📨 Send Message
+            ðŸ“¨ Send Message
           </button>
 
           <button
@@ -2087,7 +1995,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             onClick={() => setShowCallModal(true)}
             style={{ fontSize: 14 }}
           >
-            📞 Log Call
+            ðŸ“ž Log Call
           </button>
 
           <button
@@ -2102,7 +2010,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             }}
             style={{ fontSize: 14 }}
           >
-            ✅ Add Task
+            âœ… Add Task
           </button>
 
           <label>
@@ -2186,7 +2094,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   {item.type === 'message' ? (
                     <div>
                       <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
-                        {item.data.direction} • {item.data.channel}
+                        {item.data.direction} â€¢ {item.data.channel}
                       </div>
                       <div>{item.data.body}</div>
                     </div>
@@ -2204,7 +2112,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           kind={item.data.status === 'OPEN' ? 'warn' : item.data.status === 'CLOSED' ? 'ok' : 'muted'}
                           text={item.data.status}
                         />{' '}
-                        • {item.data.reason}
+                        â€¢ {item.data.reason}
                       </div>
                       {item.data.suggestedSalesmanId ? (
                         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
@@ -2215,7 +2123,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   ) : item.type === 'success' ? (
                     <div>
                       <div>
-                        {item.data.type} • weight {item.data.weight}
+                        {item.data.type} â€¢ weight {item.data.weight}
                       </div>
                       {item.data.salesmanId ? (
                         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>Salesman: {item.data.salesmanId}</div>
@@ -2225,7 +2133,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   ) : item.type === 'call' ? (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>📞</span>
+                        <span style={{ fontSize: 16 }}>ðŸ“ž</span>
                         <Badge
                           kind={
                             item.data.outcome === 'ANSWERED' ? 'ok' : 
@@ -2245,7 +2153,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       )}
                       {item.data.recordingUrl && (
                         <a href={item.data.recordingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, marginTop: 4, display: 'block' }}>
-                          🎧 Listen to recording
+                          ðŸŽ§ Listen to recording
                         </a>
                       )}
                     </div>
@@ -2356,7 +2264,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          ✏️ Edit
+                          âœï¸ Edit
                         </button>
                         <button
                           onClick={async () => {
@@ -2372,7 +2280,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          {task.status === 'IN_PROGRESS' ? '⏸️ Pause' : '▶️ Start'}
+                          {task.status === 'IN_PROGRESS' ? 'â¸ï¸ Pause' : 'â–¶ï¸ Start'}
                         </button>
                         <button
                           className="primary"
@@ -2387,7 +2295,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          ✓ Complete
+                          âœ“ Complete
                         </button>
                       </>
                     )}
@@ -2405,7 +2313,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       }}
                       style={{ fontSize: 12, marginLeft: 'auto' }}
                     >
-                      🗑️ Delete
+                      ðŸ—‘ï¸ Delete
                     </button>
                   </div>
                 </div>
@@ -2424,7 +2332,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                 {(lead.messages ?? []).map((m: any) => (
                   <div key={m.id} className="sak-card" style={{ padding: 10 }}>
                     <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
-                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> • {m.channel} •{' '}
+                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> â€¢ {m.channel} â€¢{' '}
                       {new Date(m.createdAt).toLocaleString()}
                     </div>
                     <div>{m.body}</div>
@@ -2469,8 +2377,8 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                     <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{new Date(it.createdAt).toLocaleString()}</div>
                     <div>
                       <Badge kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : 'muted'} text={it.status} />{' '}
-                      • {it.reason}
-                      {it.suggestedSalesmanId ? ` • suggested ${it.suggestedSalesmanId}` : ''}
+                      â€¢ {it.reason}
+                      {it.suggestedSalesmanId ? ` â€¢ suggested ${it.suggestedSalesmanId}` : ''}
                     </div>
                   </div>
                 ))}
@@ -2522,8 +2430,8 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       <div key={ev.id} className="sak-card" style={{ borderRadius: 12, padding: 10 }}>
                         <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(ev.createdAt).toLocaleString()}</div>
                         <div>
-                          {ev.type} • weight {ev.weight}
-                          {ev.salesmanId ? ` • salesman ${ev.salesmanId}` : ''}
+                          {ev.type} â€¢ weight {ev.weight}
+                          {ev.salesmanId ? ` â€¢ salesman ${ev.salesmanId}` : ''}
                         </div>
                         {ev.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{ev.note}</div> : null}
                       </div>
@@ -2606,7 +2514,7 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
               </td>
               <td>
                 {it.status === 'CLOSED' ? (
-                  <span style={{ fontSize: 12, opacity: 0.7 }}>—</span>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>â€”</span>
                 ) : (
                   <select
                     defaultValue={it.suggestedSalesmanId ?? ''}
@@ -2621,7 +2529,7 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
                     }}
                   >
                     <option value="" disabled>
-                      Select…
+                      Selectâ€¦
                     </option>
                     {salesmen.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -2769,7 +2677,7 @@ function SalesmenPage({ onError, onInfo }: { onError: (m: string) => void; onInf
                 <Badge kind={scoreKind(Number(s.score ?? 0))} text={`SCORE ${Number(s.score ?? 0)}`} />
                 <Badge
                   kind={Number(s.capacity ?? 0) === 0 ? 'ok' : 'muted'}
-                  text={Number(s.capacity ?? 0) === 0 ? 'CAP ∞' : `CAP ${Number(s.capacity ?? 0)}`}
+                  text={Number(s.capacity ?? 0) === 0 ? 'CAP âˆž' : `CAP ${Number(s.capacity ?? 0)}`}
                 />
               </td>
               <td>
@@ -3016,7 +2924,7 @@ function SuccessPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
 
       {defs.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No definitions yet.</div> : null}
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-        Each tenant can define what “success” means (with weights). Salesman scores are normalized to 0–100 based on success events in the last 30 days.
+        Each tenant can define what â€œsuccessâ€ means (with weights). Salesman scores are normalized to 0â€“100 based on success events in the last 30 days.
       </div>
     </div>
   )
@@ -3382,7 +3290,7 @@ function ReportsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {idx < 3 && (
                         <span style={{ fontSize: 18 }}>
-                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                          {idx === 0 ? 'ðŸ¥‡' : idx === 1 ? 'ðŸ¥ˆ' : 'ðŸ¥‰'}
                         </span>
                       )}
                       <span style={{ fontWeight: 600 }}>{s.displayName}</span>
@@ -3430,11 +3338,11 @@ function ActivityFeedPage({ onError, onInfo }: { onError: (m: string) => void; o
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'event': return '📅'
-      case 'note': return '📝'
-      case 'call': return '📞'
-      case 'task': return '✓'
-      default: return '•'
+      case 'event': return 'ðŸ“…'
+      case 'note': return 'ðŸ“'
+      case 'call': return 'ðŸ“ž'
+      case 'task': return 'âœ“'
+      default: return 'â€¢'
     }
   }
 
@@ -3577,13 +3485,13 @@ function ActivityFeedPage({ onError, onInfo }: { onError: (m: string) => void; o
                   {item.type === 'note' && (
                     <div>
                       {item.data.body}
-                      {item.data.userName && <span style={{ color: '#6b7280' }}> — {item.data.userName}</span>}
+                      {item.data.userName && <span style={{ color: '#6b7280' }}> â€” {item.data.userName}</span>}
                     </div>
                   )}
                   {item.type === 'call' && (
                     <div>
                       <strong>{item.data.answered ? 'Answered' : 'Missed'}</strong> call
-                      {item.data.duration && <span> — {Math.floor(item.data.duration / 60)}m {item.data.duration % 60}s</span>}
+                      {item.data.duration && <span> â€” {Math.floor(item.data.duration / 60)}m {item.data.duration % 60}s</span>}
                       {item.data.userName && <span style={{ color: '#6b7280' }}> by {item.data.userName}</span>}
                     </div>
                   )}
@@ -3794,7 +3702,7 @@ function AuditLogsPage({ onError, onInfo }: { onError: (m: string) => void; onIn
                     {formatChanges(log.changes)}
                   </td>
                   <td style={{ padding: '0.75rem', fontSize: '0.75rem', opacity: 0.7 }}>
-                    {log.ipAddress || '—'}
+                    {log.ipAddress || 'â€”'}
                   </td>
                 </tr>
               ))}
