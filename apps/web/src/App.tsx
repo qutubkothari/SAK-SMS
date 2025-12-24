@@ -6,6 +6,7 @@ import { Leads2025 } from './components/Leads2025'
 import { Dashboard2025 } from './components/Dashboard2025'
 import { AppLayout2025 } from './components/AppLayout2025'
 import { Triage2025 } from './components/Triage2025'
+import { Salesmen2025 } from './components/Salesmen2025'
 import {
   authMode,
   assignLead,
@@ -92,6 +93,9 @@ function triageReasonKind(reason: string): 'ok' | 'warn' | 'danger' | 'muted' {
   return 'muted'
 }
 
+// Old helper - kept for reference
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function scoreKind(score: number): 'ok' | 'warn' | 'danger' | 'muted' {
   if (!Number.isFinite(score)) return 'muted'
   if (score >= 70) return 'ok'
@@ -2440,12 +2444,12 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
 }
 
 function SalesmenPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
-  const [rows, setRows] = useState<any[]>([])
+  const [salesmen, setSalesmen] = useState<any[]>([])
 
   async function refresh() {
     try {
       const out = await listSalesmen()
-      setRows(out.salesmen)
+      setSalesmen(out.salesmen)
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Failed')
     }
@@ -2453,105 +2457,24 @@ function SalesmenPage({ onError, onInfo }: { onError: (m: string) => void; onInf
 
   useEffect(() => {
     refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const handleUpdate = async (id: string, updates: { displayName: string; isActive: boolean }) => {
+    try {
+      await updateSalesman(id, updates)
+      onInfo('Salesman updated')
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
   return (
-    <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h2 style={{ margin: 0 }}>Salesmen</h2>
-          <button onClick={refresh}>Refresh</button>
-        </div>
-      </div>
-
-      <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th align="left">Name</th>
-            <th align="left">Email</th>
-            <th align="left">Active leads</th>
-            <th align="left">Score (0-100)</th>
-            <th align="left">Capacity (0 = unlimited)</th>
-            <th align="left">Active</th>
-            <th align="left">Indicators</th>
-            <th align="left"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((s) => (
-            <tr key={s.id}>
-              <td style={{ padding: '6px 0' }}>{s.displayName}</td>
-              <td>{s.email}</td>
-              <td>{s.activeLeadCount ?? 0}</td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={String(s.score ?? 0)}
-                  onChange={(e) =>
-                    setRows((prev) => prev.map((p) => (p.id === s.id ? { ...p, score: Number(e.target.value) } : p)))
-                  }
-                  style={{ width: 120 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  max={200}
-                  step={1}
-                  value={String(s.capacity ?? 0)}
-                  onChange={(e) =>
-                    setRows((prev) => prev.map((p) => (p.id === s.id ? { ...p, capacity: Number(e.target.value) } : p)))
-                  }
-                  style={{ width: 160 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(s.isActive)}
-                  onChange={(e) =>
-                    setRows((prev) => prev.map((p) => (p.id === s.id ? { ...p, isActive: e.target.checked } : p)))
-                  }
-                />
-              </td>
-              <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Badge kind={s.isActive ? 'ok' : 'muted'} text={s.isActive ? 'ACTIVE' : 'INACTIVE'} />
-                <Badge kind={scoreKind(Number(s.score ?? 0))} text={`SCORE ${Number(s.score ?? 0)}`} />
-                <Badge
-                  kind={Number(s.capacity ?? 0) === 0 ? 'ok' : 'muted'}
-                  text={Number(s.capacity ?? 0) === 0 ? 'CAP âˆž' : `CAP ${Number(s.capacity ?? 0)}`}
-                />
-              </td>
-              <td>
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateSalesman(s.id, { score: Number(s.score), capacity: Number(s.capacity), isActive: Boolean(s.isActive) })
-                      onInfo('Saved')
-                      await refresh()
-                    } catch (err) {
-                      onError(err instanceof Error ? err.message : 'Failed')
-                    }
-                  }}
-                >
-                  Save
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {rows.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No salesmen yet.</div> : null}
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-        Routing uses score + current active-lead load and skips salesmen at/over capacity (when capacity &gt; 0).
-      </div>
-    </div>
+    <Salesmen2025
+      salesmen={salesmen}
+      onUpdate={handleUpdate}
+      onRefresh={refresh}
+    />
   )
 }
 
