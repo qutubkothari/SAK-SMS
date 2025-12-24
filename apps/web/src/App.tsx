@@ -8,6 +8,7 @@ import { AppLayout2025 } from './components/AppLayout2025'
 import { Triage2025 } from './components/Triage2025'
 import { Salesmen2025 } from './components/Salesmen2025'
 import { Reports2025 } from './components/Reports2025'
+import { ActivityFeed2025 } from './components/ActivityFeed2025'
 import {
   authMode,
   assignLead,
@@ -20,7 +21,6 @@ import {
   devBootstrap,
   devSeed,
   exportLeadsCsv,
-  getActivityFeed,
   getAuditLogs,
   getUnreadNotificationCount,
   getSuccessAnalytics,
@@ -2966,6 +2966,7 @@ function ActivityFeedPage({ onError, onInfo }: { onError: (m: string) => void; o
   const load = async () => {
     setLoading(true)
     try {
+      const { getActivityFeed } = await import('./lib/api')
       const data = await getActivityFeed(limit)
       setFeed(data.feed || [])
       if (data.feed && data.feed.length > 0) {
@@ -2980,183 +2981,23 @@ function ActivityFeedPage({ onError, onInfo }: { onError: (m: string) => void; o
 
   useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit])
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'event': return 'ðŸ“…'
-      case 'note': return 'ðŸ“'
-      case 'call': return 'ðŸ“ž'
-      case 'task': return 'âœ“'
-      default: return 'â€¢'
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'event': return '#3b82f6'
-      case 'note': return '#8b5cf6'
-      case 'call': return '#10b981'
-      case 'task': return '#f59e0b'
-      default: return '#6b7280'
-    }
-  }
-
-  const formatTime = (time: string) => {
-    const date = new Date(time)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-
-    if (minutes < 1) return 'Just now'
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    if (days < 7) return `${days}d ago`
-    return date.toLocaleDateString()
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit)
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Activity Feed</h1>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <select
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-            style={{
-              padding: '0.5rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '0.875rem'
-            }}
-          >
-            <option value={25}>Last 25</option>
-            <option value={50}>Last 50</option>
-            <option value={100}>Last 100</option>
-          </select>
-          <button
-            onClick={load}
-            disabled={loading}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.375rem',
-              fontSize: '0.875rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1
-            }}
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
-
-      {loading && feed.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
-          Loading activity...
-        </div>
-      ) : feed.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
-          No activity yet
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {feed.map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                display: 'flex',
-                gap: '1rem',
-                transition: 'box-shadow 0.2s'
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: `${getTypeColor(item.type)}20`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.25rem',
-                  flexShrink: 0
-                }}
-              >
-                {getIcon(item.type)}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-                  <div>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        padding: '0.125rem 0.5rem',
-                        backgroundColor: getTypeColor(item.type),
-                        color: 'white',
-                        borderRadius: '0.25rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        textTransform: 'uppercase',
-                        marginRight: '0.5rem'
-                      }}
-                    >
-                      {item.type}
-                    </span>
-                    {item.data.leadName && (
-                      <span style={{ fontWeight: '600', color: '#111827' }}>
-                        {item.data.leadName}
-                      </span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                    {formatTime(item.time)}
-                  </span>
-                </div>
-                <div style={{ color: '#374151', fontSize: '0.875rem' }}>
-                  {item.type === 'event' && (
-                    <div>
-                      <strong>{item.data.outcome}</strong> - {item.data.message}
-                      {item.data.userName && <span style={{ color: '#6b7280' }}> by {item.data.userName}</span>}
-                    </div>
-                  )}
-                  {item.type === 'note' && (
-                    <div>
-                      {item.data.body}
-                      {item.data.userName && <span style={{ color: '#6b7280' }}> â€” {item.data.userName}</span>}
-                    </div>
-                  )}
-                  {item.type === 'call' && (
-                    <div>
-                      <strong>{item.data.answered ? 'Answered' : 'Missed'}</strong> call
-                      {item.data.duration && <span> â€” {Math.floor(item.data.duration / 60)}m {item.data.duration % 60}s</span>}
-                      {item.data.userName && <span style={{ color: '#6b7280' }}> by {item.data.userName}</span>}
-                    </div>
-                  )}
-                  {item.type === 'task' && (
-                    <div>
-                      <strong>{item.data.completed ? 'Completed' : 'Created'}</strong>: {item.data.title}
-                      {item.data.userName && <span style={{ color: '#6b7280' }}> by {item.data.userName}</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <ActivityFeed2025
+      feed={feed}
+      loading={loading}
+      limit={limit}
+      onLimitChange={handleLimitChange}
+      onRefresh={load}
+    />
   )
 }
-
 function AuditLogsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
