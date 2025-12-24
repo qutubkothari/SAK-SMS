@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
@@ -10,6 +10,7 @@ import { Salesmen2025 } from './components/Salesmen2025'
 import { Reports2025 } from './components/Reports2025'
 import { ActivityFeed2025 } from './components/ActivityFeed2025'
 import { AuditLogs2025 } from './components/AuditLogs2025'
+import { Success2025 } from './components/Success2025'
 import {
   authMode,
   assignLead,
@@ -105,6 +106,7 @@ function scoreKind(score: number): 'ok' | 'warn' | 'danger' | 'muted' {
   return 'danger'
 }
 
+// @ts-ignore - unused helper
 function weightKind(weight: number): 'ok' | 'warn' | 'danger' | 'muted' {
   if (!Number.isFinite(weight)) return 'muted'
   if (weight >= 60) return 'danger'
@@ -174,18 +176,18 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
   }, [i18n.language, isArabic])
 
   const navItems = [
-    { to: '/', label: 'Dashboard', icon: 'ðŸ“Š' },
-    { to: '/leads', label: t('leads'), icon: 'ðŸ‘¥' },
-    { to: '/triage', label: t('triage'), icon: 'ðŸŽ¯' },
-    { to: '/salesmen', label: 'Salesmen', icon: 'ðŸ‘”' },
-    { to: '/reports', label: 'Reports', icon: 'ðŸ“ˆ' },
-    { to: '/activity-feed', label: 'Activity', icon: 'âš¡' },
-    ...(session.user?.role === 'ADMIN' ? [{ to: '/audit-logs', label: 'Audit', icon: 'ðŸ”' }] : []),
-    { to: '/success', label: 'Success', icon: 'ðŸŽ‰' },
-    { to: '/settings', label: 'Settings', icon: 'âš™ï¸' },
-    { to: '/ai', label: 'AI', icon: 'ðŸ¤–' },
-    { to: '/bots', label: 'Bots', icon: 'ðŸ”§' },
-    { to: '/ingest', label: 'Ingest', icon: 'ðŸ“¥' },
+    { to: '/', label: 'Dashboard', icon: '📊' },
+    { to: '/leads', label: t('leads'), icon: '👥' },
+    { to: '/triage', label: t('triage'), icon: '🎯' },
+    { to: '/salesmen', label: 'Salesmen', icon: '👔' },
+    { to: '/reports', label: 'Reports', icon: '📈' },
+    { to: '/activity-feed', label: 'Activity', icon: '⚡' },
+    ...(session.user?.role === 'ADMIN' ? [{ to: '/audit-logs', label: 'Audit', icon: '🔍' }] : []),
+    { to: '/success', label: 'Success', icon: '🎉' },
+    { to: '/settings', label: 'Settings', icon: '⚙️' },
+    { to: '/ai', label: 'AI', icon: '🤖' },
+    { to: '/bots', label: 'Bots', icon: '🔧' },
+    { to: '/ingest', label: 'Ingest', icon: '📥' },
   ]
 
   if (mode !== 'dev_headers' && !session.user) {
@@ -202,7 +204,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
       <aside className={`sak-sidebar ${sidebarCollapsed ? 'sak-sidebar--collapsed' : ''}`}>
         <div className="sak-sidebar__header">
           <div className="sak-sidebar__logo">
-            <span className="sak-sidebar__logo-icon">ðŸŽ¯</span>
+            <span className="sak-sidebar__logo-icon">🎯</span>
             {!sidebarCollapsed && <span className="sak-sidebar__logo-text">{t('appTitle')}</span>}
           </div>
           <button 
@@ -210,7 +212,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? 'Expand' : 'Collapse'}
           >
-            {sidebarCollapsed ? 'â†’' : 'â†'}
+            {sidebarCollapsed ? '→' : '←'}
           </button>
         </div>
 
@@ -274,8 +276,8 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
               value={i18n.language} 
               onChange={(e) => i18n.changeLanguage(e.target.value)}
             >
-              <option value="en">ðŸŒ EN</option>
-              <option value="ar">ðŸŒ AR</option>
+              <option value="en">🌐 EN</option>
+              <option value="ar">🌐 AR</option>
             </select>
 
             {/* Notifications */}
@@ -284,7 +286,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                 className="sak-header__btn"
                 onClick={() => setNotificationsOpen((v) => !v)}
               >
-                <span style={{ fontSize: '18px' }}>ðŸ””</span>
+                <span style={{ fontSize: '18px' }}>🔔</span>
                 {unreadCount > 0 && (
                   <span className="sak-header__badge">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -361,7 +363,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                             opacity: 0.6
                           }}
                         >
-                          <div style={{ fontSize: '48px', marginBottom: '12px' }}>ðŸ”•</div>
+                          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔕</div>
                           <div style={{ fontWeight: '600', marginBottom: '4px' }}>
                             {t('noNotifications')}
                           </div>
@@ -373,13 +375,13 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                             const isUnread = !n.readAt
                             const getNotificationIcon = (title: string) => {
                               const t = title.toLowerCase()
-                              if (t.includes('lead')) return 'ðŸ‘¤'
-                              if (t.includes('task')) return 'âœ“'
-                              if (t.includes('call')) return 'ðŸ“ž'
-                              if (t.includes('message')) return 'ðŸ’¬'
-                              if (t.includes('success') || t.includes('won')) return 'ðŸŽ‰'
-                              if (t.includes('urgent') || t.includes('hot')) return 'ðŸ”¥'
-                              return 'ðŸ“¢'
+                              if (t.includes('lead')) return '👤'
+                              if (t.includes('task')) return '✓'
+                              if (t.includes('call')) return '📞'
+                              if (t.includes('message')) return '💬'
+                              if (t.includes('success') || t.includes('won')) return '🎉'
+                              if (t.includes('urgent') || t.includes('hot')) return '🔥'
+                              return '📢'
                             }
                             return (
                               <div
@@ -481,7 +483,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                                         flexShrink: 0
                                       }}
                                     >
-                                      âœ“
+                                      ✓
                                     </button>
                                   )}
                                 </div>
@@ -566,7 +568,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <span>ðŸšª</span>
+                      <span>🚪</span>
                       <span>Logout</span>
                     </button>
                   </div>
@@ -587,7 +589,7 @@ function AppLayout({ session, onLoggedOut, children }: { session: SessionState; 
 
 function RequireAuth({ session, children }: { session: SessionState; children: ReactElement }) {
   if (authMode() === 'dev_headers') return children
-  if (session.loading) return <div style={{ padding: 12 }}>Loadingâ€¦</div>
+  if (session.loading) return <div style={{ padding: 12 }}>Loading…</div>
   if (!session.user) return <Navigate to="/login" replace />
   return children
 }
@@ -907,7 +909,7 @@ function IngestPage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
           </button>
         </div>
         <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-          This stores IN/OUT messages in DB and triggers AI triage + draft reply. If pricing isnâ€™t allowed, it escalates to triage.
+          This stores IN/OUT messages in DB and triggers AI triage + draft reply. If pricing isn’t allowed, it escalates to triage.
         </div>
       </div>
     </div>
@@ -1238,10 +1240,10 @@ function LeadsPageOld({ onError }: { onError: (m: string) => void }) {
 
           <select value={qualificationFilter} onChange={(e) => setQualificationFilter(e.target.value)}>
             <option value="ALL">All Qualification</option>
-            <option value="HOT">ðŸ”¥ HOT</option>
-            <option value="WARM">ðŸŒ¡ï¸ WARM</option>
-            <option value="QUALIFIED">âœ“ QUALIFIED</option>
-            <option value="COLD">â„ï¸ COLD</option>
+            <option value="HOT">🔥 HOT</option>
+            <option value="WARM">🌡️ WARM</option>
+            <option value="QUALIFIED">✓ QUALIFIED</option>
+            <option value="COLD">❄️ COLD</option>
           </select>
 
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -1256,7 +1258,7 @@ function LeadsPageOld({ onError }: { onError: (m: string) => void }) {
             style={{ padding: '0.5rem', minWidth: '40px' }}
             title={`Sort ${sortOrder === 'asc' ? 'Ascending' : 'Descending'}`}
           >
-            {sortOrder === 'asc' ? 'â†‘' : 'â†“'}
+            {sortOrder === 'asc' ? '↑' : '↓'}
           </button>
 
           {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || channelFilter !== 'ALL' || qualificationFilter !== 'ALL') && (
@@ -1371,7 +1373,7 @@ function LeadsPageOld({ onError }: { onError: (m: string) => void }) {
                     )}
                   </div>
                 ) : (
-                  <span style={{ opacity: 0.5 }}>â€”</span>
+                  <span style={{ opacity: 0.5 }}>—</span>
                 )}
               </td>
               <td style={{ opacity: l.assignedToSalesmanId ? 1 : 0.5 }}>
@@ -1515,7 +1517,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     return items.sort((a, b) => b.time.getTime() - a.time.getTime())
   }, [lead, calls])
 
-  if (!lead) return <div style={{ padding: 12 }}>Loadingâ€¦</div>
+  if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
 
   return (
     <>
@@ -1542,7 +1544,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>Send Message</h3>
-              <button onClick={() => setShowMessageModal(false)}>âœ•</button>
+              <button onClick={() => setShowMessageModal(false)}>✕</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -1629,7 +1631,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>Log Call</h3>
-              <button onClick={() => setShowCallModal(false)}>âœ•</button>
+              <button onClick={() => setShowCallModal(false)}>✕</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -1741,7 +1743,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h3>
-              <button onClick={() => setShowTaskModal(false)}>âœ•</button>
+              <button onClick={() => setShowTaskModal(false)}>✕</button>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -1910,7 +1912,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             onClick={() => setShowMessageModal(true)}
             style={{ fontSize: 14 }}
           >
-            ðŸ“¨ Send Message
+            📨 Send Message
           </button>
 
           <button
@@ -1918,7 +1920,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             onClick={() => setShowCallModal(true)}
             style={{ fontSize: 14 }}
           >
-            ðŸ“ž Log Call
+            📞 Log Call
           </button>
 
           <button
@@ -1933,7 +1935,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
             }}
             style={{ fontSize: 14 }}
           >
-            âœ… Add Task
+            ✅ Add Task
           </button>
 
           <label>
@@ -2017,7 +2019,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   {item.type === 'message' ? (
                     <div>
                       <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
-                        {item.data.direction} â€¢ {item.data.channel}
+                        {item.data.direction} • {item.data.channel}
                       </div>
                       <div>{item.data.body}</div>
                     </div>
@@ -2035,7 +2037,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           kind={item.data.status === 'OPEN' ? 'warn' : item.data.status === 'CLOSED' ? 'ok' : 'muted'}
                           text={item.data.status}
                         />{' '}
-                        â€¢ {item.data.reason}
+                        • {item.data.reason}
                       </div>
                       {item.data.suggestedSalesmanId ? (
                         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
@@ -2046,7 +2048,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   ) : item.type === 'success' ? (
                     <div>
                       <div>
-                        {item.data.type} â€¢ weight {item.data.weight}
+                        {item.data.type} • weight {item.data.weight}
                       </div>
                       {item.data.salesmanId ? (
                         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>Salesman: {item.data.salesmanId}</div>
@@ -2056,7 +2058,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                   ) : item.type === 'call' ? (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>ðŸ“ž</span>
+                        <span style={{ fontSize: 16 }}>📞</span>
                         <Badge
                           kind={
                             item.data.outcome === 'ANSWERED' ? 'ok' : 
@@ -2076,7 +2078,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       )}
                       {item.data.recordingUrl && (
                         <a href={item.data.recordingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, marginTop: 4, display: 'block' }}>
-                          ðŸŽ§ Listen to recording
+                          🎧 Listen to recording
                         </a>
                       )}
                     </div>
@@ -2187,7 +2189,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          âœï¸ Edit
+                          ✏️ Edit
                         </button>
                         <button
                           onClick={async () => {
@@ -2203,7 +2205,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          {task.status === 'IN_PROGRESS' ? 'â¸ï¸ Pause' : 'â–¶ï¸ Start'}
+                          {task.status === 'IN_PROGRESS' ? '⏸️ Pause' : '▶️ Start'}
                         </button>
                         <button
                           className="primary"
@@ -2218,7 +2220,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                           }}
                           style={{ fontSize: 12 }}
                         >
-                          âœ“ Complete
+                          ✓ Complete
                         </button>
                       </>
                     )}
@@ -2236,7 +2238,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       }}
                       style={{ fontSize: 12, marginLeft: 'auto' }}
                     >
-                      ðŸ—‘ï¸ Delete
+                      🗑️ Delete
                     </button>
                   </div>
                 </div>
@@ -2255,7 +2257,7 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                 {(lead.messages ?? []).map((m: any) => (
                   <div key={m.id} className="sak-card" style={{ padding: 10 }}>
                     <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
-                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> â€¢ {m.channel} â€¢{' '}
+                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> • {m.channel} •{' '}
                       {new Date(m.createdAt).toLocaleString()}
                     </div>
                     <div>{m.body}</div>
@@ -2300,8 +2302,8 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                     <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{new Date(it.createdAt).toLocaleString()}</div>
                     <div>
                       <Badge kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : 'muted'} text={it.status} />{' '}
-                      â€¢ {it.reason}
-                      {it.suggestedSalesmanId ? ` â€¢ suggested ${it.suggestedSalesmanId}` : ''}
+                      • {it.reason}
+                      {it.suggestedSalesmanId ? ` • suggested ${it.suggestedSalesmanId}` : ''}
                     </div>
                   </div>
                 ))}
@@ -2353,8 +2355,8 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
                       <div key={ev.id} className="sak-card" style={{ borderRadius: 12, padding: 10 }}>
                         <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(ev.createdAt).toLocaleString()}</div>
                         <div>
-                          {ev.type} â€¢ weight {ev.weight}
-                          {ev.salesmanId ? ` â€¢ salesman ${ev.salesmanId}` : ''}
+                          {ev.type} • weight {ev.weight}
+                          {ev.salesmanId ? ` • salesman ${ev.salesmanId}` : ''}
                         </div>
                         {ev.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{ev.note}</div> : null}
                       </div>
@@ -2502,203 +2504,59 @@ function SuccessPage({ onError, onInfo }: { onError: (m: string) => void; onInfo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const handleNewDefinitionChange = (field: 'name' | 'type' | 'weight', value: any) => {
+    if (field === 'name') setName(value)
+    else if (field === 'type') setType(value)
+    else if (field === 'weight') setWeight(value)
+  }
+
+  const handleDefinitionChange = (id: string, field: 'name' | 'weight' | 'isActive', value: any) => {
+    setDefs((prev) => prev.map((d) => (d.id === id ? { ...d, [field]: value } : d)))
+  }
+
+  const handleCreateDefinition = async () => {
+    try {
+      await createSuccessDefinition({ name, type, weight })
+      onInfo('Created')
+      await refresh()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
+  const handleSaveDefinition = async (id: string) => {
+    try {
+      const def = defs.find((d) => d.id === id)
+      if (!def) return
+      await updateSuccessDefinition(id, { name: def.name, weight: Number(def.weight), isActive: Boolean(def.isActive) })
+      onInfo('Saved')
+      await refresh()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
+  const handleRecomputeScores = async () => {
+    try {
+      const out = await recomputeScores()
+      onInfo(`Scores recomputed (${out.updates.length})`)
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
   return (
-    <div style={{ padding: 12 }}>
-      {analytics ? (
-        <div className="sak-card" style={{ padding: 12, marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0 }}>Analytics</h2>
-            <Badge kind={'muted'} text={`LAST ${analytics.days} DAYS`} />
-          </div>
-
-          <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {(analytics.eventsByType ?? []).map((x: any) => (
-              <div key={x.type} className="sak-card" style={{ padding: 10, borderRadius: 12 }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>{x.type}</div>
-                <div style={{ fontWeight: 700 }}>{x.count}</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>weight {x.weight}</div>
-              </div>
-            ))}
-            {(analytics.eventsByType ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No success events in this window.</div>
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Leads by status</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                {(analytics.leadStatusCounts ?? []).map((x: any) => (
-                  <Badge key={x.status} kind={'muted'} text={`${x.status} ${x.count}`} />
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Leads by heat</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                {(analytics.leadHeatCounts ?? []).map((x: any) => (
-                  <Badge key={x.heat} kind={'muted'} text={`${x.heat} ${x.count}`} />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Top salesmen (by success weight)</div>
-            {(analytics.leaderboard ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No salesman events yet.</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th align="left">Salesman</th>
-                    <th align="left">Events</th>
-                    <th align="left">Weight</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(analytics.leaderboard ?? []).map((r: any) => (
-                    <tr key={r.salesmanId}>
-                      <td style={{ padding: '6px 0' }}>{r.displayName}</td>
-                      <td>{r.events}</td>
-                      <td>
-                        <Badge kind={weightKind(Number(r.weight ?? 0))} text={String(Number(r.weight ?? 0))} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0 }}>Success definitions</h2>
-          <button onClick={refresh}>Refresh</button>
-          <button
-            onClick={async () => {
-              try {
-                const out = await recomputeScores()
-                onInfo(`Scores recomputed (${out.updates.length})`)
-              } catch (e) {
-                onError(e instanceof Error ? e.message : 'Failed')
-              }
-            }}
-          >
-            Recompute salesman scores
-          </button>
-        </div>
-
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-          <select value={type} onChange={(e) => setType(e.target.value as any)}>
-            {['DEMO_BOOKED', 'PAYMENT_RECEIVED', 'ORDER_RECEIVED', 'CONTRACT_SIGNED', 'CUSTOM'].map((x) => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min={0}
-            max={1000}
-            step={1}
-            value={String(weight)}
-            onChange={(e) => setWeight(Number(e.target.value))}
-            style={{ width: 140 }}
-          />
-          <button
-            onClick={async () => {
-              try {
-                await createSuccessDefinition({ name, type, weight })
-                onInfo('Created')
-                await refresh()
-              } catch (e) {
-                onError(e instanceof Error ? e.message : 'Failed')
-              }
-            }}
-          >
-            Create
-          </button>
-        </div>
-      </div>
-
-      <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th align="left">Name</th>
-            <th align="left">Type</th>
-            <th align="left">Weight</th>
-            <th align="left">Active</th>
-            <th align="left">Indicators</th>
-            <th align="left"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {defs.map((d) => (
-            <tr key={d.id}>
-              <td style={{ padding: '6px 0' }}>
-                <input
-                  value={d.name}
-                  onChange={(e) => setDefs((prev) => prev.map((p) => (p.id === d.id ? { ...p, name: e.target.value } : p)))}
-                  style={{ width: '100%' }}
-                />
-              </td>
-              <td>{d.type}</td>
-              <td>
-                <input
-                  type="number"
-                  min={0}
-                  max={1000}
-                  step={1}
-                  value={String(d.weight)}
-                  onChange={(e) =>
-                    setDefs((prev) => prev.map((p) => (p.id === d.id ? { ...p, weight: Number(e.target.value) } : p)))
-                  }
-                  style={{ width: 140 }}
-                />
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(d.isActive)}
-                  onChange={(e) =>
-                    setDefs((prev) => prev.map((p) => (p.id === d.id ? { ...p, isActive: e.target.checked } : p)))
-                  }
-                />
-              </td>
-              <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Badge kind={d.isActive ? 'ok' : 'muted'} text={d.isActive ? 'ACTIVE' : 'INACTIVE'} />
-                <Badge kind={d.type === 'DEMO_BOOKED' ? 'ok' : d.type === 'PAYMENT_RECEIVED' ? 'warn' : 'muted'} text={d.type} />
-                <Badge kind={weightKind(Number(d.weight ?? 0))} text={`WEIGHT ${Number(d.weight ?? 0)}`} />
-              </td>
-              <td>
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateSuccessDefinition(d.id, { name: d.name, weight: Number(d.weight), isActive: Boolean(d.isActive) })
-                      onInfo('Saved')
-                      await refresh()
-                    } catch (e) {
-                      onError(e instanceof Error ? e.message : 'Failed')
-                    }
-                  }}
-                >
-                  Save
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {defs.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No definitions yet.</div> : null}
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-        Each tenant can define what â€œsuccessâ€ means (with weights). Salesman scores are normalized to 0â€“100 based on success events in the last 30 days.
-      </div>
-    </div>
+    <Success2025
+      definitions={defs}
+      analytics={analytics}
+      newDefinition={{ name, type, weight }}
+      onNewDefinitionChange={handleNewDefinitionChange}
+      onDefinitionChange={handleDefinitionChange}
+      onCreateDefinition={handleCreateDefinition}
+      onSaveDefinition={handleSaveDefinition}
+      onRecomputeScores={handleRecomputeScores}
+      onRefresh={refresh}
+    />
   )
 }
 
