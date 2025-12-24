@@ -237,6 +237,7 @@ model Lead {
   notes        Note[]
   calls        Call[]
   tasks        Task[]
+  slaViolations SlaViolation[]
 
   @@index([tenantId])
   @@index([tenantId, channel])
@@ -439,4 +440,65 @@ model AuditLog {
   @@index([tenantId, userId])
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
+}
+
+model SlaRule {
+  id                String   @id @default(cuid())
+  tenantId          String
+  name              String
+  description       String?
+  isActive          Boolean  @default(true)
+  
+  // Trigger conditions
+  triggerOn         String   // NEW_LEAD, MESSAGE_RECEIVED, TRIAGE_ESCALATED, LEAD_ASSIGNED
+  leadStatus        String?  // Optional: only for specific statuses
+  leadHeat          String?  // Optional: only for specific heat levels
+  channel           String?  // Optional: only for specific channels
+  
+  // SLA targets
+  responseTimeMinutes Int    // How long before first response required
+  escalationTimeMinutes Int? // How long before escalation
+  
+  // Actions
+  notifyRoles       String[] // Roles to notify (OWNER, ADMIN, MANAGER)
+  escalateToRole    String?  // Role to escalate to if SLA breached
+  autoReassign      Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  violations        SlaViolation[]
+  
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}
+
+model SlaViolation {
+  id                String   @id @default(cuid())
+  tenantId          String
+  slaRuleId         String
+  leadId            String
+  
+  triggeredAt       DateTime
+  dueAt             DateTime
+  respondedAt       DateTime?
+  escalatedAt       DateTime?
+  resolvedAt        DateTime?
+  
+  status            String   @default("PENDING") // PENDING, RESPONDED, ESCALATED, RESOLVED, BREACHED
+  breachMinutes     Int?     // How many minutes over SLA
+  
+  notificationsSent Int      @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  slaRule           SlaRule  @relation(fields: [slaRuleId], references: [id])
+  lead              Lead     @relation(fields: [leadId], references: [id])
+  
+  @@index([tenantId])
+  @@index([tenantId, leadId])
+  @@index([tenantId, status])
+  @@index([dueAt])
+  @@index([status, dueAt])
 }

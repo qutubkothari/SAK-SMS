@@ -2094,6 +2094,10 @@ routes.post(
       });
     }
 
+    // Mark SLA as responded
+    const { markSlaResponded } = await import('./services/sla.js');
+    await markSlaResponded(leadId);
+
     res.json({ ok: true, message: { id: message.id, createdAt: message.createdAt.toISOString() } });
   })
 );
@@ -2338,6 +2342,8 @@ async function handleIngestMessage(params: {
     });
   })();
 
+  const isNewLead = !body.externalId && !body.phone && !body.email;
+
   await prisma.message.create({
     data: {
       tenantId,
@@ -2348,6 +2354,27 @@ async function handleIngestMessage(params: {
       raw: { botId: bot?.id ?? null }
     }
   });
+
+  // Trigger SLA monitoring
+  const { triggerSlaMonitoring } = await import('./services/sla.js');
+  
+  if (isNewLead) {
+    // New lead SLA
+    await triggerSlaMonitoring({
+      tenantId,
+      leadId: lead.id,
+      event: 'NEW_LEAD',
+      lead: { status: lead.status, heat: lead.heat, channel: lead.channel }
+    });
+  } else {
+    // Message received SLA
+    await triggerSlaMonitoring({
+      tenantId,
+      leadId: lead.id,
+      event: 'MESSAGE_RECEIVED',
+      lead: { status: lead.status, heat: lead.heat, channel: lead.channel }
+    });
+  }
 
   const ai = await createAiGatewayForTenant(prisma, tenantId);
 
@@ -2557,6 +2584,40 @@ routes.post(
   })
 );
 
+// Get predictive insights for a lead
+routes.get(
+  '/leads/:id/insights',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Check access
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, tenantId }
+    });
+
+    if (!lead) {
+      res.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+
+    if (role === 'SALESMAN') {
+      const salesman = await prisma.salesman.findFirst({
+        where: { tenantId, userId }
+      });
+      if (!salesman || lead.assignedToSalesmanId !== salesman.id) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const { getLeadPredictiveInsights } = await import('./services/leadScoring.js');
+    const insights = await getLeadPredictiveInsights(leadId);
+
+    res.json({ ok: true, insights });
+  })
+);
+
 // Bulk lead operations
 routes.post(
   '/leads/bulk/assign',
@@ -2710,6 +2771,217 @@ routes.get(
     feed.sort((a, b) => b.time.getTime() - a.time.getTime());
 
     res.json({ feed: feed.slice(0, limit) });
+  })
+);
+
+// SLA Management
+routes.get(
+  '/sla/rules',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const rules = await prisma.slaRule.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ rules });
+  })
+);
+
+routes.post(
+  '/sla/rules',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const body = z.object({
+      name: z.string().min(1).max(100),
+      description: z.string().optional(),
+      triggerOn: z.enum(['NEW_LEAD', 'MESSAGE_RECEIVED', 'TRIAGE_ESCALATED', 'LEAD_ASSIGNED']),
+      leadStatus: z.string().optional(),
+      leadHeat: z.string().optional(),
+      channel: z.string().optional(),
+      responseTimeMinutes: z.number().int().min(1).max(10080), // Max 1 week
+      escalationTimeMinutes: z.number().int().min(1).optional(),
+      notifyRoles: z.array(z.string()).min(1),
+      escalateToRole: z.string().optional(),
+      autoReassign: z.boolean().optional()
+    }).parse(req.body);
+
+    const { createSlaRule } = await import('./services/sla.js');
+    const rule = await createSlaRule(tenantId, body);
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'CREATE_SLA_RULE',
+      entityType: 'SlaRule',
+      entityId: rule.id,
+      metadata: body
+    });
+
+    res.json({ ok: true, rule });
+  })
+);
+
+routes.patch(
+  '/sla/rules/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const ruleId = z.string().parse(req.params.id);
+    const body = z.object({
+      isActive: z.boolean().optional(),
+      responseTimeMinutes: z.number().int().min(1).optional(),
+      escalationTimeMinutes: z.number().int().min(1).optional(),
+      notifyRoles: z.array(z.string()).optional(),
+      autoReassign: z.boolean().optional()
+    }).parse(req.body);
+
+    const rule = await prisma.slaRule.update({
+      where: { id: ruleId, tenantId },
+      data: body
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'UPDATE_SLA_RULE',
+      entityType: 'SlaRule',
+      entityId: ruleId,
+      metadata: body
+    });
+
+    res.json({ ok: true, rule });
+  })
+);
+
+routes.delete(
+  '/sla/rules/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const ruleId = z.string().parse(req.params.id);
+
+    await prisma.slaRule.delete({
+      where: { id: ruleId, tenantId }
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'DELETE_SLA_RULE',
+      entityType: 'SlaRule',
+      entityId: ruleId
+    });
+
+    res.json({ ok: true });
+  })
+);
+
+routes.get(
+  '/sla/violations',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const status = req.query.status ? z.string().parse(req.query.status) : undefined;
+    const limit = z.coerce.number().int().positive().max(500).default(100).parse(req.query.limit);
+
+    const where: any = { tenantId };
+    if (status) where.status = status;
+
+    const violations = await prisma.slaViolation.findMany({
+      where,
+      include: {
+        slaRule: true,
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+            status: true,
+            heat: true,
+            assignedToSalesmanId: true
+          }
+        }
+      },
+      orderBy: { dueAt: 'asc' },
+      take: limit
+    });
+
+    res.json({ violations });
+  })
+);
+
+routes.get(
+  '/sla/analytics',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role === 'SALESMAN') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const days = z.coerce.number().int().positive().max(365).default(30).parse(req.query.days);
+
+    const { getSlaAnalytics } = await import('./services/sla.js');
+    const analytics = await getSlaAnalytics(tenantId, days);
+
+    res.json({ ok: true, analytics });
+  })
+);
+
+routes.get(
+  '/leads/:id/sla',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Check access
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, tenantId }
+    });
+
+    if (!lead) {
+      res.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+
+    if (role === 'SALESMAN') {
+      const salesman = await prisma.salesman.findFirst({
+        where: { tenantId, userId }
+      });
+      if (!salesman || lead.assignedToSalesmanId !== salesman.id) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+    }
+
+    const { getLeadSlaStatus } = await import('./services/sla.js');
+    const slaStatus = await getLeadSlaStatus(leadId);
+
+    res.json({ ok: true, sla: slaStatus });
   })
 );
 
