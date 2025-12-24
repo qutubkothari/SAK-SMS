@@ -3,7 +3,8 @@ import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-rou
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from './components/LoginPage'
 import { Leads2025 } from './components/Leads2025'
-import { Dashboard } from './components/Dashboard'
+import { Dashboard2025 } from './components/Dashboard2025'
+import { AppLayout2025 } from './components/AppLayout2025'
 import {
   authMode,
   assignLead,
@@ -111,6 +112,9 @@ function useToast() {
   return { toast, setToast }
 }
 
+// Old AppLayout - kept for reference but no longer used (using AppLayout2025 now)
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function AppLayout({ session, onLoggedOut, children }: { session: SessionState; onLoggedOut: () => void; children: React.ReactNode }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -954,7 +958,7 @@ function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (
 }
 
 function DashboardPage({ onError }: { onError: (m: string) => void }) {
-  return <Dashboard onError={onError} />
+  return <Dashboard2025 onError={onError} />
 }
 
 function LeadsPage({ onError }: { onError: (m: string) => void }) {
@@ -3651,151 +3655,45 @@ function App() {
 
   return (
     <>
-      <AppLayout
-        session={session}
-        onLoggedOut={() => {
-          setSession({ loading: false, user: null })
-        }}
-      >
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 12px 28px' }}>
-          <div style={{ padding: 12 }}>
-            {authMode() === 'dev_headers' ? <DevSetup onInfo={onInfo} onError={onError} /> : null}
-            {toast ? (
-              <div
-                className="sak-card"
-                style={{
-                  padding: 12,
-                  background: toast.kind === 'error' ? 'var(--danger-50)' : 'var(--mint-50)'
-                }}
-              >
-                {toast.message}
-              </div>
-            ) : null}
-          </div>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              authMode() === 'dev_headers' ? (
-                <Navigate to="/" replace />
-              ) : (
-                <LoginPage
-                  onError={onError}
-                  onLoggedIn={(u) => {
-                    setSession({ loading: false, user: u })
-                  }}
-                />
-              )
-            }
-          />
-
-          <Route
-            path="/"
-            element={
-              <RequireAuth session={session}>
-                <DashboardPage onError={onError} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/leads"
-            element={
-              <RequireAuth session={session}>
-                <LeadsPage onError={onError} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/triage"
-            element={
-              <RequireAuth session={session}>
-                <TriagePage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/salesmen"
-            element={
-              <RequireAuth session={session}>
-                <SalesmenPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <RequireAuth session={session}>
-                <ReportsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/activity-feed"
-            element={
-              <RequireAuth session={session}>
-                <ActivityFeedPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/audit-logs"
-            element={
-              <RequireAuth session={session}>
-                <AuditLogsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/success"
-            element={
-              <RequireAuth session={session}>
-                <SuccessPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <RequireAuth session={session}>
-                <SettingsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/ai"
-            element={
-              <RequireAuth session={session}>
-                <AiPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/leads/:id"
-            element={
-              <RequireAuth session={session}>
-                <LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/bots"
-            element={
-              <RequireAuth session={session}>
-                <BotsPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/ingest"
-            element={
-              <RequireAuth session={session}>
-                <IngestPage onError={onError} onInfo={onInfo} />
-              </RequireAuth>
-            }
-          />
-        </Routes>
-        </div>
-      </AppLayout>
+      <Routes>
+        <Route path="/login" element={<LoginPage onError={onError} onLoggedIn={(u) => setSession({ loading: false, user: u })} />} />
+        <Route path="/*" element={
+          <RequireAuth session={session}>
+            <AppLayout2025 
+              user={session.user} 
+              onLogout={() => {
+                if (authMode() === 'dev_headers') {
+                  saveDevAuth({ userId: '', role: 'MANAGER', tenantId: '' })
+                }
+                setSession({ loading: false, user: null })
+              }}
+            >
+              {authMode() === 'dev_headers' && <DevSetup onInfo={onInfo} onError={onError} />}
+              {toast && (
+                <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-white/90 backdrop-blur-md px-6 py-3 rounded-2xl shadow-soft-lg border border-white/20 animate-fade-in">
+                  <span className={toast.kind === 'error' ? 'text-red-600' : 'text-mint-600'}>{toast.message}</span>
+                </div>
+              )}
+              <Routes>
+                {authMode() === 'dev_headers' && <Route path="/dev-setup" element={<DevSetup onError={onError} onInfo={onInfo} />} />}
+                <Route path="/" element={<DashboardPage onError={onError} />} />
+                <Route path="/leads" element={<LeadsPage onError={onError} />} />
+                <Route path="/leads/:id" element={<LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />} />
+                <Route path="/triage" element={<TriagePage onError={onError} onInfo={onInfo} />} />
+                <Route path="/salesmen" element={<SalesmenPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/reports" element={<ReportsPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/activity-feed" element={<ActivityFeedPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/audit-logs" element={<AuditLogsPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/success" element={<SuccessPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/settings" element={<SettingsPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/ai" element={<AiPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/bots" element={<BotsPage onError={onError} onInfo={onInfo} />} />
+                <Route path="/ingest" element={<IngestPage onError={onError} onInfo={onInfo} />} />
+              </Routes>
+            </AppLayout2025>
+          </RequireAuth>
+        } />
+      </Routes>
     </>
   )
 }
