@@ -5,6 +5,7 @@ import { LoginPage } from './components/LoginPage'
 import { Leads2025 } from './components/Leads2025'
 import { Dashboard2025 } from './components/Dashboard2025'
 import { AppLayout2025 } from './components/AppLayout2025'
+import { Triage2025 } from './components/Triage2025'
 import {
   authMode,
   assignLead,
@@ -51,7 +52,7 @@ import {
   saveDevAuth,
   reopenTriageItem,
   type Notification,
-  type TriageStatusFilter,
+  // type TriageStatusFilter,  // Unused in new Triage2025
   type SessionUser,
   updateAiConfig,
   updateBot,
@@ -80,6 +81,9 @@ function Badge({ kind, text }: { kind: 'ok' | 'warn' | 'danger' | 'muted'; text:
   )
 }
 
+// Old helper function - kept for reference
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function triageReasonKind(reason: string): 'ok' | 'warn' | 'danger' | 'muted' {
   const r = reason.toLowerCase()
   if (r.includes('pricing') || r.includes('price')) return 'danger'
@@ -2362,15 +2366,12 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
 }
 
 function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
-  const { t } = useTranslation()
   const [items, setItems] = useState<any[]>([])
   const [salesmen, setSalesmen] = useState<any[]>([])
-  const [status, setStatus] = useState<TriageStatusFilter>('OPEN')
-  const [closeNoteById, setCloseNoteById] = useState<Record<string, string>>({})
 
   async function refresh() {
     try {
-      const [triage, sm] = await Promise.all([listTriage(status), listSalesmen()])
+      const [triage, sm] = await Promise.all([listTriage('ALL'), listSalesmen()])
       setItems(triage.items)
       setSalesmen(sm.salesmen)
     } catch (e) {
@@ -2380,128 +2381,61 @@ function TriagePage({ onError, onInfo }: { onError: (m: string) => void; onInfo:
 
   useEffect(() => {
     refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+  }, [])
+
+  const handleAssign = async (itemId: string, salesmanId: string) => {
+    try {
+      await assignTriageItem(itemId, salesmanId)
+      onInfo('Triage assigned')
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const handleClose = async (itemId: string, reason: string) => {
+    try {
+      await closeTriageItem(itemId, { note: reason })
+      onInfo('Closed')
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const handleReopen = async (itemId: string) => {
+    try {
+      await reopenTriageItem(itemId)
+      onInfo('Reopened')
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const triageItems = items.map(item => ({
+    id: item.id,
+    type: item.reason,
+    createdAt: item.createdAt,
+    assignedTo: item.suggestedSalesmanId,
+    assignedToName: salesmen.find(s => s.id === item.suggestedSalesmanId)?.displayName,
+    status: item.status === 'OPEN' ? 'NEW' as const : item.status === 'ASSIGNED' ? 'IN_PROGRESS' as const : 'CLOSED' as const,
+    leadId: item.lead?.id,
+    leadName: item.lead?.fullName || item.lead?.phone,
+    channel: item.lead?.channel,
+    message: item.lead?.lastMessage,
+    closedReason: item.closeNote,
+  }))
 
   return (
-    <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h2 style={{ margin: 0 }}>{t('openTriage')}</h2>
-          <button onClick={refresh}>{t('refresh')}</button>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, opacity: 0.8 }}>Status</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value as TriageStatusFilter)}>
-              <option value="OPEN">OPEN</option>
-              <option value="ASSIGNED">ASSIGNED</option>
-              <option value="CLOSED">CLOSED</option>
-              <option value="ALL">ALL</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th align="left">{t('lead')}</th>
-            <th align="left">{t('reason')}</th>
-            <th align="left">Status</th>
-            <th align="left">{t('assign')}</th>
-            <th align="left">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => (
-            <tr key={it.id}>
-              <td style={{ padding: '6px 0' }}>
-                <Link to={`/leads/${it.lead.id}`}>{it.lead.fullName ?? it.lead.phone ?? it.lead.id}</Link>
-              </td>
-              <td>
-                <Badge kind={triageReasonKind(it.reason)} text={it.reason} />
-              </td>
-              <td>
-                <Badge
-                  kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : it.status === 'ASSIGNED' ? 'muted' : 'muted'}
-                  text={it.status}
-                />
-              </td>
-              <td>
-                {it.status === 'CLOSED' ? (
-                  <span style={{ fontSize: 12, opacity: 0.7 }}>â€”</span>
-                ) : (
-                  <select
-                    defaultValue={it.suggestedSalesmanId ?? ''}
-                    onChange={async (e) => {
-                      try {
-                        await assignTriageItem(it.id, e.target.value)
-                        onInfo('Triage assigned')
-                        await refresh()
-                      } catch (err) {
-                        onError(err instanceof Error ? err.message : 'Failed')
-                      }
-                    }}
-                  >
-                    <option value="" disabled>
-                      Selectâ€¦
-                    </option>
-                    {salesmen.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.displayName}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </td>
-              <td>
-                {it.status === 'CLOSED' ? (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await reopenTriageItem(it.id)
-                        onInfo('Reopened')
-                        await refresh()
-                      } catch (err) {
-                        onError(err instanceof Error ? err.message : 'Failed')
-                      }
-                    }}
-                  >
-                    Reopen
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      value={closeNoteById[it.id] ?? ''}
-                      onChange={(e) => setCloseNoteById((p) => ({ ...p, [it.id]: e.target.value }))}
-                      placeholder="Close note (optional)"
-                      style={{ width: 220 }}
-                    />
-                    <button
-                      onClick={async () => {
-                        try {
-                          await closeTriageItem(it.id, { note: closeNoteById[it.id] || undefined })
-                          setCloseNoteById((p) => {
-                            const next = { ...p }
-                            delete next[it.id]
-                            return next
-                          })
-                          onInfo('Closed')
-                          await refresh()
-                        } catch (err) {
-                          onError(err instanceof Error ? err.message : 'Failed')
-                        }
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {items.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No triage items.</div> : null}
-    </div>
+    <Triage2025 
+      items={triageItems}
+      salesmen={salesmen.map(s => ({ id: s.id, name: s.displayName }))}
+      onAssign={handleAssign}
+      onClose={handleClose}
+      onReopen={handleReopen}
+      onRefresh={refresh}
+    />
   )
 }
 
