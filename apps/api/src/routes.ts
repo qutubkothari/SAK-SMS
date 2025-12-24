@@ -2297,7 +2297,7 @@ const ingestMessageSchema = ingestMessageBodySchema.refine((v) => Boolean(v.cust
   message: 'Required'
 });
 
-async function handleIngestMessage(params: {
+export async function handleIngestMessage(params: {
   tenantId: string;
   body: z.infer<typeof ingestMessageSchema>;
 }) {

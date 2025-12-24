@@ -68,9 +68,6 @@ sakWebhookRouter.post(
       return;
     }
 
-    // Forward to the existing ingest endpoint
-    const ingestUrl = `http://localhost:${process.env.PORT || 4000}/webhooks/ingest/message`;
-    
     // Get the first tenant (or you can add session-to-tenant mapping later)
     const tenant = await prisma.tenant.findFirst();
     if (!tenant) {
@@ -79,31 +76,26 @@ sakWebhookRouter.post(
       return;
     }
     
-    console.log(`Using tenant: ${tenant.id} (${tenant.name})`);
+    console.log(`WhatsApp message received from ${phoneNumber} (${senderName}): ${message.substring(0, 50)}...`);
     
     try {
-      const ingestResponse = await fetch(ingestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-webhook-secret': process.env.WEBHOOK_SECRET || 'dev-webhook-secret',
-        },
-        body: JSON.stringify({
-          tenantId: tenant.id,
-          channel: 'WHATSAPP',
+      // Import and call the ingest handler directly
+      const { handleIngestMessage } = await import('../routes.js');
+      
+      await handleIngestMessage({
+        tenantId: tenant.id,
+        body: {
+          channel: 'WHATSAPP' as const,
           phone: phoneNumber,
           fullName: senderName || undefined,
           customerMessage: message,
           externalId: payload.messageId,
-        }),
+        }
       });
-
-      if (!ingestResponse.ok) {
-        const errorText = await ingestResponse.text().catch(() => '');
-        console.error(`Failed to forward message to ingest: ${ingestResponse.status} ${errorText}`);
-      }
+      
+      console.log(`Successfully ingested WhatsApp message from ${phoneNumber}`);
     } catch (error) {
-      console.error('Error forwarding message to ingest:', error);
+      console.error('Error ingesting WhatsApp message:', error);
     }
 
     res.json({ ok: true });
