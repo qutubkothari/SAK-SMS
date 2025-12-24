@@ -12,6 +12,7 @@ import { ActivityFeed2025 } from './components/ActivityFeed2025'
 import { AuditLogs2025 } from './components/AuditLogs2025'
 import { Success2025 } from './components/Success2025'
 import { Settings2025 } from './components/Settings2025'
+import { AI2025 } from './components/AI2025'
 import {
   authMode,
   assignLead,
@@ -619,74 +620,42 @@ function AiPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const handleApiKeyChange = (key: string) => {
+    setOpenaiApiKey(key)
+    setKeyTouched(true)
+  }
+
+  const handleSave = async () => {
+    try {
+      const payload: any = {
+        provider,
+        openaiModel: openaiModel || null
+      }
+      if (keyTouched) payload.openaiApiKey = openaiApiKey ? openaiApiKey : null
+      const out = await updateAiConfig(payload)
+      if (out.warning) onInfo(out.warning)
+      onInfo('Saved AI config')
+      setOpenaiApiKey('')
+      setKeyTouched(false)
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
   return (
-    <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0 }}>AI</h2>
-          <Badge kind={provider === 'OPENAI' ? 'ok' : provider === 'GEMINI' ? 'warn' : 'muted'} text={`PROVIDER ${provider}`} />
-          {config ? <Badge kind={config.hasOpenaiApiKey ? 'ok' : 'muted'} text={config.hasOpenaiApiKey ? 'OPENAI KEY STORED' : 'NO OPENAI KEY'} /> : null}
-          {config ? <Badge kind={'muted'} text={`TENANT ${config.tenantId}`} /> : null}
-        </div>
-
-        <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          Provider
-          <select value={provider} onChange={(e) => setProvider(e.target.value as any)}>
-            <option value="MOCK">MOCK</option>
-            <option value="OPENAI">OPENAI</option>
-            <option value="GEMINI">GEMINI</option>
-          </select>
-        </label>
-
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          OpenAI model
-          <input value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)} style={{ width: 220 }} />
-        </label>
-
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          OpenAI API key
-          <input
-            type="password"
-            value={openaiApiKey}
-            onChange={(e) => {
-              setOpenaiApiKey(e.target.value)
-              setKeyTouched(true)
-            }}
-            placeholder={config?.hasOpenaiApiKey ? '(stored) leave blank to keep' : ''}
-            style={{ width: 320 }}
-          />
-        </label>
-
-        <button
-          onClick={async () => {
-            try {
-              const payload: any = {
-                provider,
-                openaiModel: openaiModel || null
-              }
-              if (keyTouched) payload.openaiApiKey = openaiApiKey ? openaiApiKey : null
-              const out = await updateAiConfig(payload)
-              if (out.warning) onInfo(out.warning)
-              onInfo('Saved AI config')
-              setOpenaiApiKey('')
-              setKeyTouched(false)
-              await refresh()
-            } catch (err) {
-              onError(err instanceof Error ? err.message : 'Failed')
-            }
-          }}
-        >
-          Save
-        </button>
-        <button onClick={refresh}>Refresh</button>
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          This affects `/ingest/message`, `/ai/triage`, and `/ai/draft-reply` for this tenant.
-        </div>
-      </div>
-    </div>
+    <AI2025
+      config={config}
+      provider={provider}
+      openaiModel={openaiModel}
+      openaiApiKey={openaiApiKey}
+      keyTouched={keyTouched}
+      onProviderChange={setProvider}
+      onModelChange={setOpenaiModel}
+      onApiKeyChange={handleApiKeyChange}
+      onSave={handleSave}
+      onRefresh={refresh}
+    />
   )
 }
 
