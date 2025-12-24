@@ -7,6 +7,7 @@ import { Dashboard2025 } from './components/Dashboard2025'
 import { AppLayout2025 } from './components/AppLayout2025'
 import { Triage2025 } from './components/Triage2025'
 import { Salesmen2025 } from './components/Salesmen2025'
+import { Reports2025 } from './components/Reports2025'
 import {
   authMode,
   assignLead,
@@ -2841,244 +2842,119 @@ function SettingsPage({ onError, onInfo }: { onError: (m: string) => void; onInf
 }
 
 function ReportsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
-  const [timeRange, setTimeRange] = useState<number>(30)
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date()
+    date.setDate(date.getDate() - 30)
+    return date.toISOString().split('T')[0]
+  })
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [reportData, setReportData] = useState<any>(null)
 
   async function refresh() {
     try {
-      setLoading(true)
-      const { getTimeSeriesAnalytics, getSuccessAnalytics } = await import('./lib/api')
-      const [timeSeries, successData] = await Promise.all([
-        getTimeSeriesAnalytics(timeRange),
-        getSuccessAnalytics(timeRange)
+      const { listLeads, listSalesmen } = await import('./lib/api')
+      const [leadsResult, salesmenResult] = await Promise.all([
+        listLeads(),
+        listSalesmen()
       ])
-      setData({ ...timeSeries, ...successData })
-      setLoading(false)
+
+      const leads = leadsResult.leads || []
+      const salesmen = salesmenResult.salesmen || []
+
+      // Filter by date range
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const filteredLeads = leads.filter((lead: any) => {
+        const createdAt = new Date(lead.createdAt)
+        return createdAt >= start && createdAt <= end
+      })
+
+      // Calculate metrics
+      const totalLeads = filteredLeads.length
+      const newLeads = filteredLeads.filter((l: any) => l.status === 'NEW').length
+      const convertedLeads = filteredLeads.filter((l: any) => l.status === 'WON').length
+      const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0
+      const averageScore = totalLeads > 0 ? filteredLeads.reduce((sum: number, l: any) => sum + (l.score || 0), 0) / totalLeads : 0
+
+      // Top salesmen
+      const salesmenStats = salesmen.map((s: any) => {
+        const salesmanLeads = filteredLeads.filter((l: any) => l.assignedTo === s.id)
+        const conversions = salesmanLeads.filter((l: any) => l.status === 'WON').length
+        const rate = salesmanLeads.length > 0 ? (conversions / salesmanLeads.length) * 100 : 0
+        return { name: s.displayName, conversions, rate }
+      }).sort((a, b) => b.conversions - a.conversions).slice(0, 6)
+
+      // Leads by channel
+      const channelCounts: Record<string, number> = {}
+      filteredLeads.forEach((lead: any) => {
+        const channel = lead.channel || 'WEB'
+        channelCounts[channel] = (channelCounts[channel] || 0) + 1
+      })
+      const leadsByChannel = Object.entries(channelCounts).map(([channel, count]) => ({ channel, count }))
+        .sort((a, b) => b.count - a.count)
+
+      // Daily trend (last 7 days)
+      const dailyTrend = []
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(end)
+        date.setDate(date.getDate() - i)
+        const dateStr = date.toISOString().split('T')[0]
+        const dayLeads = filteredLeads.filter((l: any) => l.createdAt.startsWith(dateStr))
+        const dayConversions = dayLeads.filter((l: any) => l.status === 'WON').length
+        dailyTrend.push({ date: dateStr, leads: dayLeads.length, conversions: dayConversions })
+      }
+
+      setReportData({
+        totalLeads,
+        newLeads,
+        convertedLeads,
+        conversionRate,
+        averageScore,
+        topSalesmen: salesmenStats,
+        leadsByChannel,
+        dailyTrend,
+      })
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Failed to load reports')
-      setLoading(false)
     }
   }
 
   useEffect(() => {
     refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange])
+  }, [startDate, endDate])
 
-  async function handleExport(type: 'leads' | 'success' | 'salesmen') {
+  const handleDateChange = (start: string, end: string) => {
+    setStartDate(start)
+    setEndDate(end)
+  }
+
+  const handleExport = async () => {
     try {
-      const { exportAnalyticsReport } = await import('./lib/api')
-      await exportAnalyticsReport(type)
-      onInfo(`${type.charAt(0).toUpperCase() + type.slice(1)} report exported successfully`)
+      const { exportLeadsCsv } = await import('./lib/api')
+      await exportLeadsCsv()
+      onInfo('Report exported successfully')
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Export failed')
     }
   }
 
-  if (loading) return <div style={{ padding: 12 }}>Loading reports...</div>
-  if (!data) return <div style={{ padding: 12 }}>No data available</div>
-
-  // Calculate totals
-  const totalNewLeads = data.timeSeries?.reduce((sum: number, day: any) => sum + day.newLeads, 0) || 0
-  const totalMessagesIn = data.timeSeries?.reduce((sum: number, day: any) => sum + day.messagesIn, 0) || 0
-  const totalMessagesOut = data.timeSeries?.reduce((sum: number, day: any) => sum + day.messagesOut, 0) || 0
-  const totalSuccessEvents = data.timeSeries?.reduce((sum: number, day: any) => sum + day.successEvents, 0) || 0
-  const totalSuccessWeight = data.timeSeries?.reduce((sum: number, day: any) => sum + day.successWeight, 0) || 0
+  if (!reportData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-slate-600">Loading reports...</div>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Reports & Analytics</h2>
-        <select value={timeRange} onChange={(e) => setTimeRange(Number(e.target.value))} style={{ padding: '6px 12px' }}>
-          <option value={7}>Last 7 Days</option>
-          <option value={30}>Last 30 Days</option>
-          <option value={60}>Last 60 Days</option>
-          <option value={90}>Last 90 Days</option>
-          <option value={180}>Last 6 Months</option>
-          <option value={365}>Last Year</option>
-        </select>
-        <button onClick={refresh}>Refresh</button>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button onClick={() => handleExport('leads')} className="button">
-            Export Leads
-          </button>
-          <button onClick={() => handleExport('success')} className="button">
-            Export Success
-          </button>
-          <button onClick={() => handleExport('salesmen')} className="button">
-            Export Salesmen
-          </button>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{totalNewLeads}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>New Leads</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#f59e0b' }}>{totalMessagesIn}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Messages Received</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#8b5cf6' }}>{totalMessagesOut}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Messages Sent</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#10b981' }}>{totalSuccessEvents}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Success Events</div>
-        </div>
-        <div className="sak-card" style={{ padding: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{totalSuccessWeight.toFixed(0)}</div>
-          <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>Success Weight</div>
-        </div>
-      </div>
-
-      {/* Time Series Chart */}
-      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Activity Over Time</h3>
-        {data.timeSeries && data.timeSeries.length > 0 ? (
-          <div style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th align="left" style={{ padding: '8px 4px' }}>Date</th>
-                  <th align="right" style={{ padding: '8px 4px' }}>New Leads</th>
-                  <th align="right" style={{ padding: '8px 4px' }}>Msgs In</th>
-                  <th align="right" style={{ padding: '8px 4px' }}>Msgs Out</th>
-                  <th align="right" style={{ padding: '8px 4px' }}>Success</th>
-                  <th align="right" style={{ padding: '8px 4px' }}>Weight</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.timeSeries.map((day: any) => (
-                  <tr key={day.date} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '8px 4px' }}>{day.date}</td>
-                    <td align="right" style={{ padding: '8px 4px' }}>
-                      <Badge kind={day.newLeads > 0 ? 'ok' : 'muted'} text={String(day.newLeads)} />
-                    </td>
-                    <td align="right" style={{ padding: '8px 4px' }}>
-                      <Badge kind={day.messagesIn > 0 ? 'warn' : 'muted'} text={String(day.messagesIn)} />
-                    </td>
-                    <td align="right" style={{ padding: '8px 4px' }}>
-                      <Badge kind={day.messagesOut > 0 ? 'ok' : 'muted'} text={String(day.messagesOut)} />
-                    </td>
-                    <td align="right" style={{ padding: '8px 4px' }}>
-                      <Badge kind={day.successEvents > 0 ? 'ok' : 'muted'} text={String(day.successEvents)} />
-                    </td>
-                    <td align="right" style={{ padding: '8px 4px' }}>
-                      <Badge kind={weightKind(day.successWeight)} text={String(day.successWeight.toFixed(0))} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div style={{ opacity: 0.8 }}>No activity data in this time range</div>
-        )}
-      </div>
-
-      {/* Channel Performance */}
-      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Channel Performance</h3>
-        {data.channelStats && data.channelStats.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                <th align="left" style={{ padding: '8px 4px' }}>Channel</th>
-                <th align="right" style={{ padding: '8px 4px' }}>Total Leads</th>
-                <th align="right" style={{ padding: '8px 4px' }}>Converted</th>
-                <th align="right" style={{ padding: '8px 4px' }}>Conversion Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.channelStats.map((ch: any) => (
-                <tr key={ch.channel} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '8px 4px', fontWeight: 600 }}>{ch.channel}</td>
-                  <td align="right" style={{ padding: '8px 4px' }}>{ch.total}</td>
-                  <td align="right" style={{ padding: '8px 4px' }}>
-                    <Badge kind={ch.converted > 0 ? 'ok' : 'muted'} text={String(ch.converted)} />
-                  </td>
-                  <td align="right" style={{ padding: '8px 4px' }}>
-                    <Badge
-                      kind={
-                        parseFloat(ch.conversionRate) >= 20
-                          ? 'ok'
-                          : parseFloat(ch.conversionRate) >= 10
-                          ? 'warn'
-                          : 'danger'
-                      }
-                      text={`${ch.conversionRate}%`}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div style={{ opacity: 0.8 }}>No channel data available</div>
-        )}
-      </div>
-
-      {/* Success Event Types */}
-      <div className="sak-card" style={{ padding: 16, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Success Events by Type</h3>
-        {data.eventsByType && data.eventsByType.length > 0 ? (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {data.eventsByType.map((ev: any) => (
-              <div key={ev.type} className="sak-card" style={{ padding: 12, borderRadius: 12, minWidth: 200 }}>
-                <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{ev.type}</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6', marginBottom: 4 }}>{ev.count}</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>Weight: {ev.weight}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ opacity: 0.8 }}>No success events in this time range</div>
-        )}
-      </div>
-
-      {/* Leaderboard */}
-      <div className="sak-card" style={{ padding: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Top Performers</h3>
-        {data.leaderboard && data.leaderboard.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                <th align="left" style={{ padding: '8px 4px' }}>Salesman</th>
-                <th align="right" style={{ padding: '8px 4px' }}>Events</th>
-                <th align="right" style={{ padding: '8px 4px' }}>Total Weight</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.leaderboard.map((s: any, idx: number) => (
-                <tr key={s.salesmanId} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {idx < 3 && (
-                        <span style={{ fontSize: 18 }}>
-                          {idx === 0 ? 'ðŸ¥‡' : idx === 1 ? 'ðŸ¥ˆ' : 'ðŸ¥‰'}
-                        </span>
-                      )}
-                      <span style={{ fontWeight: 600 }}>{s.displayName}</span>
-                    </div>
-                  </td>
-                  <td align="right" style={{ padding: '8px 4px' }}>{s.events}</td>
-                  <td align="right" style={{ padding: '8px 4px' }}>
-                    <Badge kind={weightKind(s.weight)} text={String(s.weight.toFixed(0))} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div style={{ opacity: 0.8 }}>No performance data yet</div>
-        )}
-      </div>
-    </div>
+    <Reports2025
+      data={reportData}
+      startDate={startDate}
+      endDate={endDate}
+      onDateChange={handleDateChange}
+      onExport={handleExport}
+      onRefresh={refresh}
+    />
   )
 }
 
