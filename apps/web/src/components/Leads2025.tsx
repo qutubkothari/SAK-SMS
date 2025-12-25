@@ -188,7 +188,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
             <Link
               key={lead.id}
               to={`/leads/${lead.id}`}
-              className="bg-white/70 backdrop-blur-md rounded-2xl p-5 border border-white/20 hover:border-mint-200 hover:shadow-soft-lg transition-all group"
+              className="bg-white/70 backdrop-blur-md rounded-2xl p-5 border border-white/20 hover:border-mint-200 hover:shadow-soft-lg transition-all"
               style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
             >
               <div className="flex items-center gap-4">
