@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { Search, Flame, Phone, Mail, MessageSquare, UserPlus, MoreVertical, TrendingUp, Download } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Search, Flame, Phone, Mail, MessageSquare, UserPlus, MoreVertical, TrendingUp, Download, Eye, Trash2, PhoneCall } from 'lucide-react'
 
 interface Lead {
   id: string
@@ -53,9 +53,23 @@ const channelIcons: Record<string, any> = {
 }
 
 export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -238,10 +252,91 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
+                      setOpenMenuId(openMenuId === lead.id ? null : lead.id)
                     }}
-                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all relative"
                   >
                     <MoreVertical className="w-5 h-5 text-slate-600" />
+                    
+                    {/* Dropdown Menu */}
+                    {openMenuId === lead.id && (
+                      <div 
+                        ref={menuRef}
+                        className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            navigate(`/leads/${lead.id}`)
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-sm text-slate-700"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Details
+                        </button>
+                        
+                        {lead.phone && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              window.location.href = `tel:${lead.phone}`
+                              setOpenMenuId(null)
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-sm text-slate-700"
+                          >
+                            <PhoneCall className="w-4 h-4" />
+                            Call {lead.phone}
+                          </button>
+                        )}
+                        
+                        {lead.channel === 'WHATSAPP' && lead.phone && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              const phoneNumber = lead.phone?.replace(/\+/g, '') || ''
+                              window.open(`https://wa.me/${phoneNumber}`, '_blank')
+                              setOpenMenuId(null)
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-sm text-slate-700"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            WhatsApp
+                          </button>
+                        )}
+                        
+                        {lead.email && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              window.location.href = `mailto:${lead.email}`
+                              setOpenMenuId(null)
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-sm text-slate-700"
+                          >
+                            <Mail className="w-4 h-4" />
+                            Send Email
+                          </button>
+                        )}
+                        
+                        <div className="h-px bg-slate-200 my-1" />
+                        
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (confirm(`Archive lead: ${lead.fullName || lead.phone}?`)) {
+                              // TODO: Implement archive/delete
+                              console.log('Archive lead:', lead.id)
+                            }
+                            setOpenMenuId(null)
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Archive Lead
+                        </button>
+                      </div>
+                    )}
                   </button>
                 </div>
               </div>
