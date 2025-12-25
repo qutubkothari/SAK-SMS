@@ -1,4 +1,4 @@
-const SAK_API_URL = process.env.SAK_API_URL || 'http://13.201.102.10:5000/api/v1';
+const SAK_API_URL = process.env.SAK_API_URL || 'http://13.201.102.10/api/v1';
 const SAK_SESSION_ID = process.env.SAK_SESSION_ID || '';
 const SAK_API_KEY = process.env.SAK_API_KEY || '';
 
