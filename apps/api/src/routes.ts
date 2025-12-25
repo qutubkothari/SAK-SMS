@@ -2065,6 +2065,23 @@ routes.post(
       }
     }
 
+    // Send via WhatsApp if channel is WHATSAPP and phone exists
+    let whatsappMessageId: string | undefined;
+    if (body.channel === 'WHATSAPP' && lead.phone) {
+      const { sendWhatsAppMessage } = await import('./services/whatsapp.js');
+      const result = await sendWhatsAppMessage({
+        to: lead.phone,
+        message: body.content
+      });
+      
+      if (!result.success) {
+        console.error('Failed to send WhatsApp message:', result.error);
+        // Continue anyway to log the message attempt
+      } else {
+        whatsappMessageId = result.messageId;
+      }
+    }
+
     // Log as outbound message
     const message = await prisma.message.create({
       data: {
@@ -2082,7 +2099,12 @@ routes.post(
         tenantId,
         leadId,
         type: 'MESSAGE_SENT',
-        payload: { messageId: message.id, channel: body.channel, userId }
+        payload: { 
+          messageId: message.id, 
+          channel: body.channel, 
+          userId,
+          whatsappMessageId 
+        }
       }
     });
 
