@@ -248,27 +248,33 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                     </div>
                   )}
 
-                  <button 
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setOpenMenuId(openMenuId === lead.id ? null : lead.id)
-                    }}
-                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all relative"
-                  >
-                    <MoreVertical className="w-5 h-5 text-slate-600" />
+                  <div className="relative" ref={openMenuId === lead.id ? menuRef : null}>
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setOpenMenuId(openMenuId === lead.id ? null : lead.id)
+                      }}
+                      className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-mint-100 flex items-center justify-center transition-all"
+                    >
+                      <MoreVertical className="w-5 h-5 text-slate-600" />
+                    </button>
                     
                     {/* Dropdown Menu */}
                     {openMenuId === lead.id && (
                       <div 
-                        ref={menuRef}
-                        className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50"
-                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-12 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-[100]"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
                       >
                         <button
                           onClick={(e) => {
                             e.preventDefault()
+                            e.stopPropagation()
                             navigate(`/leads/${lead.id}`)
+                            setOpenMenuId(null)
                           }}
                           className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-sm text-slate-700"
                         >
@@ -280,6 +286,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                           <button
                             onClick={(e) => {
                               e.preventDefault()
+                              e.stopPropagation()
                               window.location.href = `tel:${lead.phone}`
                               setOpenMenuId(null)
                             }}
@@ -294,6 +301,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                           <button
                             onClick={(e) => {
                               e.preventDefault()
+                              e.stopPropagation()
                               const phoneNumber = lead.phone?.replace(/\+/g, '') || ''
                               window.open(`https://wa.me/${phoneNumber}`, '_blank')
                               setOpenMenuId(null)
@@ -309,6 +317,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                           <button
                             onClick={(e) => {
                               e.preventDefault()
+                              e.stopPropagation()
                               window.location.href = `mailto:${lead.email}`
                               setOpenMenuId(null)
                             }}
@@ -324,6 +333,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                         <button
                           onClick={(e) => {
                             e.preventDefault()
+                            e.stopPropagation()
                             if (confirm(`Archive lead: ${lead.fullName || lead.phone}?`)) {
                               // TODO: Implement archive/delete
                               console.log('Archive lead:', lead.id)
@@ -337,7 +347,7 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                         </button>
                       </div>
                     )}
-                  </button>
+                  </div>
                 </div>
               </div>
             </Link>
