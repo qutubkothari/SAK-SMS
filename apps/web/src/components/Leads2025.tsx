@@ -99,6 +99,7 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
 
   const selectedCount = selectedLeadIds.size
   const allFilteredSelected = filteredLeads.length > 0 && selectedLeadIds.size === filteredLeads.length
+  const hasActiveFilters = !!searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL' || emailsOnly
 
   const toggleSelection = (leadId: string) => {
     setSelectedLeadIds((prev) => {
@@ -232,6 +233,31 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
             </label>
 
             <div className="flex items-center gap-2">
+              {filteredLeads.length > 0 && onBulkDelete && hasActiveFilters && (
+                <button
+                  disabled={bulkDeleting}
+                  onClick={async () => {
+                    if (!confirm(`Delete all ${filteredLeads.length} filtered lead(s)?\n\nThis will permanently delete all messages, notes, and history.`)) {
+                      return
+                    }
+                    setBulkDeleting(true)
+                    try {
+                      await onBulkDelete(filteredLeads.map((l) => l.id))
+                      setSelectedLeadIds(new Set())
+                      onRefresh()
+                    } catch (err: any) {
+                      alert('Failed to delete filtered: ' + (err.message || 'Unknown error'))
+                    } finally {
+                      setBulkDeleting(false)
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 transition-all font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {bulkDeleting ? 'Deleting...' : 'Delete all filtered'}
+                </button>
+              )}
+
               {selectedCount > 0 && onBulkDelete && (
                 <button
                   disabled={bulkDeleting}
