@@ -22,6 +22,8 @@ interface Leads2025Props {
   onRefresh: () => void
   onExport?: () => void
   onDelete?: (leadId: string) => Promise<void>
+  onBulkDelete?: (leadIds: string[]) => Promise<void>
+  onDeleteAllEmailLeads?: () => Promise<void>
 }
 
 const heatConfig: Record<string, { gradient: string; label: string }> = {
@@ -56,13 +58,15 @@ const channelIcons: Record<string, any> = {
   'OTHER': MessageSquare,
 }
 
-export function Leads2025({ leads, onRefresh, onExport, onDelete }: Leads2025Props) {
+export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, onDeleteAllEmailLeads }: Leads2025Props) {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Close menu when clicking outside
@@ -90,6 +94,26 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete }: Leads2025Pro
       return matchesSearch && matchesStatus && matchesHeat
     })
   }, [leads, searchTerm, statusFilter, heatFilter])
+
+  const selectedCount = selectedLeadIds.size
+  const allFilteredSelected = filteredLeads.length > 0 && selectedLeadIds.size === filteredLeads.length
+
+  const toggleSelection = (leadId: string) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(leadId)) next.delete(leadId)
+      else next.add(leadId)
+      return next
+    })
+  }
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedLeadIds((prev) => {
+      if (filteredLeads.length === 0) return prev
+      if (prev.size === filteredLeads.length) return new Set()
+      return new Set(filteredLeads.map((l) => l.id))
+    })
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -180,6 +204,67 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete }: Leads2025Pro
             </button>
           )}
         </div>
+
+        {(onDelete || onExport) && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={() => toggleSelectAllFiltered()}
+                className="h-4 w-4 rounded border-slate-300 text-mint-600 focus:ring-mint-500/30"
+              />
+              <span>Select all</span>
+              {selectedCount > 0 && <span className="text-slate-500">({selectedCount} selected)</span>}
+            </label>
+
+            <div className="flex items-center gap-2">
+              {selectedCount > 0 && onBulkDelete && (
+                <button
+                  disabled={bulkDeleting}
+                  onClick={async () => {
+                    if (!confirm(`Delete ${selectedCount} selected lead(s)?\n\nThis will permanently delete all messages, notes, and history.`)) {
+                      return
+                    }
+                    setBulkDeleting(true)
+                    try {
+                      await onBulkDelete(Array.from(selectedLeadIds))
+                      setSelectedLeadIds(new Set())
+                      onRefresh()
+                    } catch (err: any) {
+                      alert('Failed to delete selected: ' + (err.message || 'Unknown error'))
+                    } finally {
+                      setBulkDeleting(false)
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 transition-all font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {bulkDeleting ? 'Deleting...' : 'Delete selected'}
+                </button>
+              )}
+
+              {onDeleteAllEmailLeads && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete ALL email leads?\n\nThis will permanently delete all EMAIL leads and their data.')) return
+                    try {
+                      await onDeleteAllEmailLeads()
+                      setSelectedLeadIds(new Set())
+                      onRefresh()
+                    } catch (err: any) {
+                      alert('Failed to delete all email leads: ' + (err.message || 'Unknown error'))
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 transition-all font-medium flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete all emails
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Leads Grid */}
@@ -197,6 +282,24 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete }: Leads2025Pro
               style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
             >
               <div className="flex items-center gap-4">
+                {/* Select */}
+                <div className="flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={selectedLeadIds.has(lead.id)}
+                    onChange={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      toggleSelection(lead.id)
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-mint-600 focus:ring-mint-500/30"
+                  />
+                </div>
+
                 {/* Heat Indicator */}
                 <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${heat.gradient} flex items-center justify-center flex-shrink-0 shadow-md`}>
                   <Flame className="w-7 h-7 text-white" />

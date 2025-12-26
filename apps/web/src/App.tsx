@@ -750,12 +750,31 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
     await deleteLead(leadId)
   }
 
+  const handleBulkDelete = async (leadIds: string[]) => {
+    const { bulkDeleteLeads } = await import('./lib/api')
+    await bulkDeleteLeads(leadIds)
+  }
+
+  const handleDeleteAllEmailLeads = async () => {
+    const { deleteAllEmailLeads } = await import('./lib/api')
+    await deleteAllEmailLeads()
+  }
+
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return <Leads2025 leads={leads} onRefresh={refresh} onExport={handleExport} onDelete={handleDelete} />
+  return (
+    <Leads2025
+      leads={leads}
+      onRefresh={refresh}
+      onExport={handleExport}
+      onDelete={handleDelete}
+      onBulkDelete={handleBulkDelete}
+      onDeleteAllEmailLeads={handleDeleteAllEmailLeads}
+    />
+  )
 }
 
 // Keep old implementation for reference (DEPRECATED - remove after testing)

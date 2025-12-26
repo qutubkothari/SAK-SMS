@@ -246,6 +246,13 @@ export async function deleteLead(id: string) {
   })
 }
 
+export async function bulkDeleteLeads(leadIds: string[]) {
+  return request<{ ok: true; count: number }>(`/leads/bulk/delete`, {
+    method: 'POST',
+    body: JSON.stringify({ leadIds })
+  })
+}
+
 export async function deleteAllEmailLeads() {
   return request<{ ok: true; deletedCount: number }>(`/admin/gmail-leads`, {
     method: 'DELETE'

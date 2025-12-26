@@ -85,6 +85,19 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
     'automation',
     'auto-reply',
     'out of office',
+    'manage preferences',
+    'update preferences',
+    'email preferences',
+    'view in browser',
+    'read online',
+    'forward to a friend',
+    'this email was sent',
+    'because you subscribed',
+    'you are receiving this',
+    'privacy policy',
+    'terms of service',
+    'sponsored',
+    'advertise',
     'delivery notification',
     'shipping update',
     'order confirmation',
@@ -114,6 +127,8 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
     'subscription',
     'click here',
     'congratulations',
+    'beehiiv',
+    'substack',
   ];
   
   for (const pattern of spamPatterns) {
@@ -121,13 +136,25 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
       return false;
     }
   }
+
+  // Newsletters usually contain many links; enquiries rarely do.
+  const urlCount = (body.match(/https?:\/\//g) || []).length;
+  if (urlCount >= 6) {
+    return false;
+  }
   
   // Look for enquiry indicators - these must be present for it to be an enquiry
   const enquiryPatterns = [
     'quote',
     'quotation',
+    'rfq',
+    'request for quotation',
     'price',
     'pricing',
+    'best price',
+    'rate',
+    'rates',
+    'price list',
     'enquiry',
     'inquiry',
     'enquire',
@@ -152,11 +179,28 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
     'in stock',
     'lead time',
     'delivery time',
+    'delivery charges',
+    'shipping charges',
+    'payment terms',
+    'proforma invoice',
+    'pro forma invoice',
+    'pi',
     'bulk order',
     'wholesale',
     'catalog',
     'catalogue',
     'brochure',
+    'datasheet',
+    'data sheet',
+    'specification',
+    'specifications',
+    'specs',
+    'technical details',
+    'dimensions',
+    'size',
+    'model',
+    'part number',
+    'sku',
     'samples',
     'minimum order',
     'moq',
@@ -1860,6 +1904,59 @@ routes.post(
     }
 
     res.json({ ok: true, count: updated.count });
+  })
+);
+
+routes.post(
+  '/leads/bulk/delete',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    if (role === 'SALESMAN') throw new Error('Forbidden');
+
+    const body = z
+      .object({
+        leadIds: z.array(z.string()).min(1)
+      })
+      .parse(req.body);
+
+    // Ensure all leads belong to this tenant
+    const existing = await prisma.lead.findMany({
+      where: { tenantId, id: { in: body.leadIds } },
+      select: { id: true, channel: true, fullName: true, email: true, phone: true }
+    });
+    if (existing.length !== body.leadIds.length) {
+      throw new HttpError(400, 'One or more leads not found');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const leadIdFilter = { tenantId, leadId: { in: body.leadIds } } as const;
+
+      await tx.triageQueueItem.deleteMany({ where: leadIdFilter });
+      await tx.successEvent.deleteMany({ where: leadIdFilter });
+      await tx.leadEvent.deleteMany({ where: leadIdFilter });
+      await tx.message.deleteMany({ where: leadIdFilter });
+      await tx.conversation.deleteMany({ where: leadIdFilter });
+      await tx.note.deleteMany({ where: leadIdFilter });
+      await tx.call.deleteMany({ where: leadIdFilter });
+      await tx.task.deleteMany({ where: leadIdFilter });
+
+      await tx.lead.deleteMany({ where: { tenantId, id: { in: body.leadIds } } });
+    });
+
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'BULK_DELETE_LEADS',
+      entityType: 'Lead',
+      entityId: 'bulk',
+      metadata: {
+        count: body.leadIds.length,
+        leadIds: body.leadIds,
+        snapshot: existing
+      }
+    });
+
+    res.json({ ok: true, count: body.leadIds.length });
   })
 );
 
