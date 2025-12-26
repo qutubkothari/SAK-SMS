@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { 
   Users, UserPlus, Activity, CheckCircle, AlertCircle, Briefcase, 
-  TrendingUp, Flame, MessageSquare, Phone, Mail, BarChart3, 
+  TrendingUp, Flame, BarChart3, 
   ChevronRight, Bell, X
 } from 'lucide-react'
 import { getDashboardStats } from '../lib/api'
@@ -13,13 +13,16 @@ interface DashboardStats {
   convertedLeads: number
   totalTriageOpen: number
   totalSalesmen: number
-  recentActivity: Array<{
+  leadsByStatus: Array<{ status: string; count: number }>
+  leadsByHeat: Array<{ heat: string; count: number }>
+  leadsByChannel: Array<{ channel: string; count: number }>
+  recentSuccessEvents: Array<{
     id: string
-    name: string
-    heat: 'ON_FIRE' | 'VERY_HOT' | 'HOT' | 'WARM' | 'COLD'
-    channel: 'whatsapp' | 'phone' | 'email'
-    status: string
-    time: string
+    createdAt: string
+    type: string
+    weight: number
+    definition?: { id: string; name: string; type: string; weight: number } | null
+    lead?: { fullName: string | null; phone: string | null } | null
   }>
 }
 
@@ -155,54 +158,22 @@ const EnterpriseModal = ({ isOpen, onClose, title, children }: ModalProps) => {
   )
 }
 
-// Activity Card
-interface ActivityCardProps {
-  name: string
-  heat: 'ON_FIRE' | 'VERY_HOT' | 'HOT' | 'WARM' | 'COLD'
-  channel: 'whatsapp' | 'phone' | 'email'
-  status: string
-  time: string
+function formatRelativeTime(iso: string) {
+  const ts = new Date(iso).getTime()
+  if (Number.isNaN(ts)) return ''
+  const diffMs = Date.now() - ts
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  return `${diffDay}d ago`
 }
 
-const ActivityCard = ({ name, heat, channel, status, time }: ActivityCardProps) => {
-  const heatColors = {
-    'ON_FIRE': 'from-red-500 to-orange-500',
-    'VERY_HOT': 'from-orange-500 to-amber-500',
-    'HOT': 'from-amber-500 to-yellow-500',
-    'WARM': 'from-yellow-500 to-lime-500',
-    'COLD': 'from-slate-400 to-slate-500',
-  }
-
-  const channelIcons = {
-    whatsapp: MessageSquare,
-    phone: Phone,
-    email: Mail,
-  }
-
-  const ChannelIcon = channelIcons[channel]
-
-  return (
-    <div className="flex items-center justify-between p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-white/20 hover:border-mint-200 transition-all hover:scale-[1.01]">
-      <div className="flex items-center space-x-4">
-        {/* Heat Indicator */}
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${heatColors[heat]} flex items-center justify-center`}>
-          <Flame className="w-6 h-6 text-white" />
-        </div>
-
-        {/* Details */}
-        <div>
-          <p className="font-semibold text-slate-900">{name}</p>
-          <div className="flex items-center space-x-2 mt-1">
-            <ChannelIcon className="w-4 h-4 text-slate-500" />
-            <span className="text-sm text-slate-600">{status}</span>
-            <span className="text-sm text-slate-400">• {time}</span>
-          </div>
-        </div>
-      </div>
-
-      <ChevronRight className="w-5 h-5 text-slate-400" />
-    </div>
-  )
+function normalizeCounts(items: Array<{ key: string; count: number }>) {
+  const max = Math.max(...items.map((x) => x.count), 1)
+  return { items, max }
 }
 
 // Main Dashboard Component
@@ -214,7 +185,10 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
     convertedLeads: 0,
     totalTriageOpen: 0,
     totalSalesmen: 0,
-    recentActivity: []
+    leadsByStatus: [],
+    leadsByHeat: [],
+    leadsByChannel: [],
+    recentSuccessEvents: []
   })
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -230,7 +204,10 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
           convertedLeads: data.convertedLeads || 0,
           totalTriageOpen: data.totalTriageOpen || 0,
           totalSalesmen: data.totalSalesmen || 0,
-          recentActivity: data.recentActivity || []
+          leadsByStatus: data.leadsByStatus || [],
+          leadsByHeat: data.leadsByHeat || [],
+          leadsByChannel: data.leadsByChannel || [],
+          recentSuccessEvents: data.recentSuccessEvents || []
         })
         setLoading(false)
       })
@@ -317,9 +294,35 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
               </div>
               <h3 className="text-xl font-bold text-slate-900">Leads by Status</h3>
             </div>
-            <div className="h-48 flex items-center justify-center text-slate-400">
-              Chart visualization here
-            </div>
+            {stats.leadsByStatus.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-slate-400">No data</div>
+            ) : (
+              (() => {
+                const rows = stats.leadsByStatus
+                  .map((x: any) => ({ key: String(x.status ?? 'UNKNOWN'), count: Number(x.count ?? 0) }))
+                  .filter((x) => Number.isFinite(x.count) && x.count > 0)
+                  .sort((a, b) => b.count - a.count)
+                const { max } = normalizeCounts(rows)
+                return (
+                  <div className="space-y-3">
+                    {rows.slice(0, 8).map((row) => (
+                      <div key={row.key} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-slate-700">{row.key}</span>
+                          <span className="font-semibold text-slate-900">{row.count}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-mint-400 to-mint-500"
+                            style={{ width: `${Math.round((row.count / max) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()
+            )}
           </div>
 
           {/* Leads by Heat */}
@@ -330,9 +333,35 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
               </div>
               <h3 className="text-xl font-bold text-slate-900">Leads by Heat</h3>
             </div>
-            <div className="h-48 flex items-center justify-center text-slate-400">
-              Chart visualization here
-            </div>
+            {stats.leadsByHeat.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-slate-400">No data</div>
+            ) : (
+              (() => {
+                const rows = stats.leadsByHeat
+                  .map((x: any) => ({ key: String(x.heat ?? 'UNKNOWN'), count: Number(x.count ?? 0) }))
+                  .filter((x) => Number.isFinite(x.count) && x.count > 0)
+                  .sort((a, b) => b.count - a.count)
+                const { max } = normalizeCounts(rows)
+                return (
+                  <div className="space-y-3">
+                    {rows.slice(0, 8).map((row) => (
+                      <div key={row.key} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-slate-700">{row.key}</span>
+                          <span className="font-semibold text-slate-900">{row.count}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-orange-400 to-red-500"
+                            style={{ width: `${Math.round((row.count / max) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()
+            )}
           </div>
         </div>
 
@@ -345,9 +374,30 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             </Button2025>
           </div>
           <div className="space-y-3">
-            {stats.recentActivity && stats.recentActivity.length > 0 ? (
-              stats.recentActivity.slice(0, 5).map((activity) => (
-                <ActivityCard key={activity.id} {...activity} />
+            {stats.recentSuccessEvents && stats.recentSuccessEvents.length > 0 ? (
+              stats.recentSuccessEvents.slice(0, 5).map((ev) => (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between p-4 bg-white/70 backdrop-blur-md rounded-2xl border border-white/20 hover:border-mint-200 transition-all hover:scale-[1.01]"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {(ev.lead?.fullName || ev.lead?.phone || 'Lead')}
+                      </p>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-sm text-slate-600">
+                          {ev.definition?.name || ev.type}
+                        </span>
+                        <span className="text-sm text-slate-400">• {formatRelativeTime(ev.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                </div>
               ))
             ) : (
               <p className="text-center text-slate-400 py-8">No recent activity</p>
