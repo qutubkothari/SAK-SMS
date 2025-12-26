@@ -14,6 +14,166 @@ export const routes = Router();
 
 // AI gateway is resolved per-tenant (DB-configurable) with env fallback.
 
+/**
+ * Smart enquiry detection - filters out promotional/automated emails
+ */
+function isLikelyEnquiry(email: { from: string; subject: string; text: string; fromName: string }): boolean {
+  const subject = email.subject?.toLowerCase() || '';
+  const body = email.text?.toLowerCase() || '';
+  const from = email.from?.toLowerCase() || '';
+  
+  // Block specific automated sender domains/addresses - newsletters, marketing, automation
+  const blockedSenders = [
+    // E-commerce & Services
+    '@amazon.com',
+    '@amazon.in',
+    '@netflix.com',
+    '@uber.com',
+    '@swiggy.in',
+    '@zomato.com',
+    '@paytm.com',
+    '@phonepe.com',
+    '@razorpay.com',
+    // Social Media
+    '@facebookmail.com',
+    '@linkedin.com',
+    '@twitter.com',
+    '@instagram.com',
+    '@tiktok.com',
+    // Google Services
+    '@google.com',
+    '@youtube.com',
+    '@gmail.com', // Only if from Google itself
+    // Newsletter & Email Marketing Platforms
+    '@mail.beehiiv.com',
+    '@beehiiv.com',
+    '@mailchimp.com',
+    '@sendgrid.net',
+    '@mailgun.org',
+    '@sendinblue.com',
+    '@constantcontact.com',
+    '@aweber.com',
+    '@convertkit.com',
+    '@substack.com',
+    '@ghost.io',
+    // No-reply addresses
+    'donotreply@',
+    'do-not-reply@',
+    'no-reply@',
+    'noreply@',
+    'notifications@',
+    'alerts@',
+    'news@',
+    'updates@',
+    'newsletter@',
+    'marketing@',
+    'mailer-daemon',
+    'postmaster@',
+  ];
+  
+  for (const blocked of blockedSenders) {
+    if (from.includes(blocked)) {
+      return false;
+    }
+  }
+  
+  // Skip common promotional/automated patterns in subject/body
+  const spamPatterns = [
+    'unsubscribe',
+    'newsletter',
+    'automated message',
+    'automation',
+    'auto-reply',
+    'out of office',
+    'delivery notification',
+    'shipping update',
+    'order confirmation',
+    'password reset',
+    'verify your email',
+    'confirm your email',
+    'account security',
+    'login alert',
+    'new sign-in',
+    'new device',
+    'safe-t claim',
+    'refund processed',
+    'payment received',
+    'transaction alert',
+    'otp',
+    'one-time password',
+    'verification code',
+    'promotional',
+    'limited time offer',
+    '% off',
+    'special offer',
+    'flash sale',
+    'mailing list',
+    'email digest',
+    'weekly roundup',
+    'monthly update',
+    'subscription',
+    'click here',
+    'congratulations',
+  ];
+  
+  for (const pattern of spamPatterns) {
+    if (from.includes(pattern) || subject.includes(pattern) || body.includes(pattern)) {
+      return false;
+    }
+  }
+  
+  // Look for enquiry indicators - these must be present for it to be an enquiry
+  const enquiryPatterns = [
+    'quote',
+    'quotation',
+    'price',
+    'pricing',
+    'enquiry',
+    'inquiry',
+    'enquire',
+    'inquire',
+    'interested in',
+    'looking for',
+    'requirement',
+    'require',
+    'need',
+    'want to buy',
+    'want to purchase',
+    'want to order',
+    'please send',
+    'please share',
+    'please provide',
+    'can you send',
+    'could you send',
+    'product details',
+    'service details',
+    'more information',
+    'availability',
+    'in stock',
+    'lead time',
+    'delivery time',
+    'bulk order',
+    'wholesale',
+    'catalog',
+    'catalogue',
+    'brochure',
+    'samples',
+    'minimum order',
+    'moq',
+  ];
+  
+  let enquiryScore = 0;
+  for (const pattern of enquiryPatterns) {
+    if (subject.includes(pattern) || body.includes(pattern)) {
+      enquiryScore++;
+    }
+  }
+  
+  // Must have at least one enquiry pattern to be considered a genuine enquiry
+  // This prevents random personal emails from being processed
+  return enquiryScore > 0;
+}
+
 async function createNotificationForUser(params: {
   tenantId: string;
   userId: string;
@@ -1140,7 +1300,19 @@ routes.post(
         }
 
         // Validate channel
-        const validChannels = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'EMAIL', 'PHONE', 'OTHER'];
+        const validChannels = [
+          'MANUAL',
+          'WHATSAPP',
+          'FACEBOOK',
+          'INSTAGRAM',
+          'INDIAMART',
+          'JUSTDIAL',
+          'GEM',
+          'PHONE',
+          'EMAIL',
+          'PERSONAL_VISIT',
+          'OTHER'
+        ];
         if (!validChannels.includes(channel)) channel = 'OTHER';
 
         await prisma.lead.create({
@@ -1187,13 +1359,91 @@ routes.get(
   })
 );
 
+// Delete a lead and all related data (messages, events, etc.)
+routes.delete(
+  '/leads/:id',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role, userId } = getAuthContext(req);
+    const leadId = z.string().parse(req.params.id);
+
+    // Only OWNER, ADMIN, MANAGER can delete leads
+    if (role === 'SALESMAN') {
+      throw new HttpError(403, 'Salesmen cannot delete leads');
+    }
+
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, tenantId }
+    });
+    if (!lead) throw new HttpError(404, 'Lead not found');
+
+    // Delete related data in correct order (foreign key constraints)
+    await prisma.$transaction(async (tx) => {
+      // Delete triage items
+      await tx.triageQueueItem.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete success events
+      await tx.successEvent.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete lead events
+      await tx.leadEvent.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete messages
+      await tx.message.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete conversations
+      await tx.conversation.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete notes
+      await tx.note.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete calls
+      await tx.call.deleteMany({ where: { leadId, tenantId } });
+      
+      // Delete tasks
+      await tx.task.deleteMany({ where: { leadId, tenantId } });
+      
+      // Finally delete the lead
+      await tx.lead.delete({ where: { id: leadId } });
+    });
+
+    // Audit log
+    await createAuditLog({
+      tenantId,
+      userId,
+      action: 'DELETE_LEAD',
+      entityType: 'Lead',
+      entityId: leadId,
+      metadata: { 
+        channel: lead.channel, 
+        fullName: lead.fullName, 
+        email: lead.email, 
+        phone: lead.phone 
+      }
+    });
+
+    res.json({ ok: true, deletedLeadId: leadId });
+  })
+);
+
 routes.post(
   '/leads',
   asyncHandler(async (req, res) => {
     const tenantId = getTenantId(req);
     const body = z
       .object({
-        channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+        channel: z.enum([
+          'MANUAL',
+          'WHATSAPP',
+          'FACEBOOK',
+          'INSTAGRAM',
+          'INDIAMART',
+          'JUSTDIAL',
+          'GEM',
+          'PHONE',
+          'EMAIL',
+          'PERSONAL_VISIT',
+          'OTHER'
+        ]),
         externalId: z.string().optional(),
         fullName: z.string().optional(),
         phone: z.string().optional(),
@@ -1279,12 +1529,79 @@ routes.get(
       salesmen: salesmen.map((s: (typeof salesmen)[number]) => ({
         id: s.id,
         displayName: s.user.displayName,
-        email: s.user.email,
+        username: s.user.email,
+        role: s.user.role,
         isActive: s.isActive,
         score: s.score,
         capacity: s.capacity,
+        minLeadsPerMonth: s.minLeadsPerMonth,
+        maxLeadsPerMonth: s.maxLeadsPerMonth,
+        useIntelligentOverride: s.useIntelligentOverride,
         activeLeadCount: loadBySalesmanId.get(s.id) ?? 0
       }))
+    });
+  })
+);
+
+routes.post(
+  '/salesmen',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    if (role !== 'ADMIN' && role !== 'OWNER') throw new Error('Forbidden');
+
+    const body = z
+      .object({
+        displayName: z.string().min(1),
+        username: z.string().min(1),
+        password: z.string().min(6),
+        role: z.enum(['SALESPERSON', 'MANAGER', 'ADMIN'])
+      })
+      .parse(req.body);
+
+    // Check if username (email) already exists
+    const existing = await prisma.user.findFirst({
+      where: { tenantId, email: body.username }
+    });
+    if (existing) throw new Error('Username already exists');
+
+    const hashedPassword = await hashPassword(body.password);
+
+    // Create user and salesman in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          tenantId,
+          email: body.username,
+          displayName: body.displayName,
+          role: body.role === 'SALESPERSON' ? 'SALESMAN' : body.role,
+          passwordHash: hashedPassword
+        }
+      });
+
+      const salesman = await tx.salesman.create({
+        data: {
+          tenantId,
+          userId: user.id,
+          isActive: true,
+          score: 50,
+          capacity: 10,
+          minLeadsPerMonth: 0,
+          maxLeadsPerMonth: 0,
+          useIntelligentOverride: false
+        }
+      });
+
+      return { user, salesman };
+    });
+
+    res.json({
+      salesman: {
+        id: result.salesman.id,
+        displayName: result.user.displayName,
+        username: result.user.email,
+        role: result.user.role,
+        isActive: result.salesman.isActive
+      }
     });
   })
 );
@@ -1298,14 +1615,38 @@ routes.patch(
     const salesmanId = z.string().parse(req.params.id);
     const body = z
       .object({
+        displayName: z.string().min(1).optional(),
         score: z.number().min(0).max(100).optional(),
         capacity: z.number().int().min(0).max(200).optional(),
-        isActive: z.boolean().optional()
+        isActive: z.boolean().optional(),
+        minLeadsPerMonth: z.number().int().min(0).optional(),
+        maxLeadsPerMonth: z.number().int().min(0).optional(),
+        useIntelligentOverride: z.boolean().optional()
       })
       .parse(req.body);
 
-    const updated = await prisma.salesman.updateMany({ where: { id: salesmanId, tenantId }, data: body });
-    if (updated.count !== 1) throw new Error('Salesman not found');
+    // Update salesman
+    const salesmanData: any = {};
+    if (body.score !== undefined) salesmanData.score = body.score;
+    if (body.capacity !== undefined) salesmanData.capacity = body.capacity;
+    if (body.isActive !== undefined) salesmanData.isActive = body.isActive;
+    if (body.minLeadsPerMonth !== undefined) salesmanData.minLeadsPerMonth = body.minLeadsPerMonth;
+    if (body.maxLeadsPerMonth !== undefined) salesmanData.maxLeadsPerMonth = body.maxLeadsPerMonth;
+    if (body.useIntelligentOverride !== undefined) salesmanData.useIntelligentOverride = body.useIntelligentOverride;
+
+    const salesman = await prisma.salesman.findFirst({ where: { id: salesmanId, tenantId } });
+    if (!salesman) throw new Error('Salesman not found');
+
+    await prisma.salesman.update({ where: { id: salesmanId }, data: salesmanData });
+
+    // Update user display name if provided
+    if (body.displayName) {
+      await prisma.user.update({
+        where: { id: salesman.userId },
+        data: { displayName: body.displayName }
+      });
+    }
+
     res.json({ ok: true });
   })
 );
@@ -2000,7 +2341,21 @@ routes.post(
     const body = z.object({
       name: z.string().min(1),
       content: z.string().min(1),
-      channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']).default('WHATSAPP')
+      channel: z
+        .enum([
+          'MANUAL',
+          'WHATSAPP',
+          'FACEBOOK',
+          'INSTAGRAM',
+          'INDIAMART',
+          'JUSTDIAL',
+          'GEM',
+          'PHONE',
+          'EMAIL',
+          'PERSONAL_VISIT',
+          'OTHER'
+        ])
+        .default('WHATSAPP')
     }).parse(req.body);
 
     const template = await prisma.messageTemplate.create({
@@ -2050,12 +2405,35 @@ routes.post(
     const { tenantId, role, userId } = getAuthContext(req);
     const leadId = z.string().parse(req.params.id);
     const body = z.object({
-      channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+      channel: z.enum([
+        'MANUAL',
+        'WHATSAPP',
+        'FACEBOOK',
+        'INSTAGRAM',
+        'INDIAMART',
+        'JUSTDIAL',
+        'GEM',
+        'PHONE',
+        'EMAIL',
+        'PERSONAL_VISIT',
+        'OTHER'
+      ]),
       content: z.string().min(1).max(5000)
     }).parse(req.body);
 
     const lead = await prisma.lead.findFirst({ where: { id: leadId, tenantId } });
     if (!lead) throw new Error('Lead not found');
+
+    const conversation = await prisma.conversation.upsert({
+      where: { leadId },
+      update: { lastMessageAt: new Date() },
+      create: {
+        tenantId,
+        leadId,
+        channel: (lead.channel as any) ?? 'OTHER',
+        lastMessageAt: new Date()
+      }
+    });
 
     // Check salesman access
     if (role === 'SALESMAN') {
@@ -2067,6 +2445,8 @@ routes.post(
 
     // Send via WhatsApp if channel is WHATSAPP and phone exists
     let whatsappMessageId: string | undefined;
+    let emailMessageId: string | undefined;
+    
     if (body.channel === 'WHATSAPP' && lead.phone) {
       const { sendWhatsAppMessage } = await import('./services/whatsapp.js');
       const result = await sendWhatsAppMessage({
@@ -2082,11 +2462,29 @@ routes.post(
       }
     }
 
+    // Send via Email if channel is EMAIL and email exists
+    if (body.channel === 'EMAIL' && lead.email) {
+      const { sendEmail } = await import('./services/email.js');
+      const result = await sendEmail({
+        to: lead.email,
+        subject: `Re: Enquiry from ${lead.fullName || 'Customer'}`,
+        text: body.content,
+      });
+      
+      if (!result.success) {
+        console.error('Failed to send email:', result.error);
+        // Continue anyway to log the message attempt
+      } else {
+        emailMessageId = result.messageId;
+      }
+    }
+
     // Log as outbound message
     const message = await prisma.message.create({
       data: {
         tenantId,
         leadId,
+        conversationId: conversation.id,
         direction: 'OUT',
         channel: body.channel as any,
         body: body.content
@@ -2103,7 +2501,8 @@ routes.post(
           messageId: message.id, 
           channel: body.channel, 
           userId,
-          whatsappMessageId 
+          whatsappMessageId,
+          emailMessageId
         }
       }
     });
@@ -2203,7 +2602,19 @@ routes.post(
     const body = z
       .object({
         leadId: z.string(),
-        channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+        channel: z.enum([
+          'MANUAL',
+          'WHATSAPP',
+          'FACEBOOK',
+          'INSTAGRAM',
+          'INDIAMART',
+          'JUSTDIAL',
+          'GEM',
+          'PHONE',
+          'EMAIL',
+          'PERSONAL_VISIT',
+          'OTHER'
+        ]),
         customerMessage: z.string().min(1)
       })
       .parse(req.body);
@@ -2244,7 +2655,19 @@ routes.post(
     const body = z
       .object({
         leadId: z.string(),
-        channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+        channel: z.enum([
+          'MANUAL',
+          'WHATSAPP',
+          'FACEBOOK',
+          'INSTAGRAM',
+          'INDIAMART',
+          'JUSTDIAL',
+          'GEM',
+          'PHONE',
+          'EMAIL',
+          'PERSONAL_VISIT',
+          'OTHER'
+        ]),
         customerMessage: z.string().min(1),
         pricingAllowed: z.boolean().default(false)
       })
@@ -2305,7 +2728,19 @@ routes.post(
 
 const ingestMessageBodySchema = z.object({
   botId: z.string().optional(),
-  channel: z.enum(['MANUAL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'OTHER']),
+  channel: z.enum([
+    'MANUAL',
+    'WHATSAPP',
+    'FACEBOOK',
+    'INSTAGRAM',
+    'INDIAMART',
+    'JUSTDIAL',
+    'GEM',
+    'PHONE',
+    'EMAIL',
+    'PERSONAL_VISIT',
+    'OTHER'
+  ]),
   externalId: z.string().optional(),
   fullName: z.string().optional(),
   phone: z.string().optional(),
@@ -2318,6 +2753,61 @@ const ingestMessageSchema = ingestMessageBodySchema.refine((v) => Boolean(v.cust
   path: ['customerMessage'],
   message: 'Required'
 });
+
+async function ensureConversation(params: {
+  tenantId: string;
+  leadId: string;
+  channel: z.infer<typeof ingestMessageBodySchema>['channel'];
+}) {
+  const now = new Date();
+  return prisma.conversation.upsert({
+    where: { leadId: params.leadId },
+    update: { lastMessageAt: now },
+    create: {
+      tenantId: params.tenantId,
+      leadId: params.leadId,
+      channel: params.channel as any,
+      lastMessageAt: now
+    }
+  });
+}
+
+async function upsertClientFromIngest(params: {
+  tenantId: string;
+  fullName?: string;
+  phone?: string;
+  email?: string;
+}) {
+  const { tenantId, fullName, phone, email } = params;
+  if (!phone && !email) return null;
+
+  const existing =
+    (phone
+      ? await prisma.client.findFirst({ where: { tenantId, phone } })
+      : null) ??
+    (email
+      ? await prisma.client.findFirst({ where: { tenantId, email } })
+      : null);
+
+  if (!existing) {
+    return prisma.client.create({
+      data: {
+        tenantId,
+        contactName: fullName,
+        phone,
+        email
+      }
+    });
+  }
+
+  const update: Record<string, unknown> = {};
+  if (!existing.contactName && fullName) update.contactName = fullName;
+  if (!existing.phone && phone) update.phone = phone;
+  if (!existing.email && email) update.email = email;
+
+  if (Object.keys(update).length === 0) return existing;
+  return prisma.client.update({ where: { id: existing.id }, data: update });
+}
 
 export async function handleIngestMessage(params: {
   tenantId: string;
@@ -2332,46 +2822,88 @@ export async function handleIngestMessage(params: {
     ? await prisma.bot.findFirst({ where: { id: body.botId, tenantId, isActive: true } })
     : null;
 
-  // Try to find an existing lead (by channel+externalId, else phone/email).
-  const lead = await (async () => {
-    if (body.externalId) {
-      const found = await prisma.lead.findFirst({
-        where: { tenantId, channel: body.channel, externalId: body.externalId }
-      });
-      if (found) return found;
-    }
+  const client = await upsertClientFromIngest({
+    tenantId,
+    fullName: body.fullName,
+    phone: body.phone,
+    email: body.email
+  });
 
-    if (body.phone) {
-      const found = await prisma.lead.findFirst({ where: { tenantId, phone: body.phone } });
-      if (found) return found;
-    }
+  // Try to find an existing lead:
+  // - idempotency: channel+externalId
+  // - else: most recent OPEN lead for this client/contact in same channel
+  let lead = null as any;
+  if (body.externalId) {
+    lead = await prisma.lead.findFirst({
+      where: { tenantId, channel: body.channel as any, externalId: body.externalId }
+    });
+  }
 
-    if (body.email) {
-      const found = await prisma.lead.findFirst({ where: { tenantId, email: body.email } });
-      if (found) return found;
-    }
+  if (!lead && client) {
+    lead = await prisma.lead.findFirst({
+      where: {
+        tenantId,
+        channel: body.channel as any,
+        clientId: client.id,
+        status: { notIn: ['WON', 'LOST'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
 
-    return prisma.lead.create({
+  if (!lead && body.phone) {
+    lead = await prisma.lead.findFirst({
+      where: {
+        tenantId,
+        channel: body.channel as any,
+        phone: body.phone,
+        status: { notIn: ['WON', 'LOST'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  if (!lead && body.email) {
+    lead = await prisma.lead.findFirst({
+      where: {
+        tenantId,
+        channel: body.channel as any,
+        email: body.email,
+        status: { notIn: ['WON', 'LOST'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  let createdNewLead = false;
+  if (!lead) {
+    lead = await prisma.lead.create({
       data: {
         tenantId,
-        channel: body.channel,
+        clientId: client?.id ?? null,
+        channel: body.channel as any,
         externalId: body.externalId,
-        fullName: body.fullName,
-        phone: body.phone,
-        email: body.email,
+        fullName: body.fullName ?? client?.contactName ?? null,
+        phone: body.phone ?? client?.phone ?? null,
+        email: body.email ?? client?.email ?? null,
         language: 'en'
       }
     });
-  })();
+    createdNewLead = true;
+  } else if (!lead.clientId && client) {
+    // Backfill link for legacy leads
+    lead = await prisma.lead.update({ where: { id: lead.id }, data: { clientId: client.id } });
+  }
 
-  const isNewLead = !body.externalId && !body.phone && !body.email;
+  const conversation = await ensureConversation({ tenantId, leadId: lead.id, channel: body.channel });
 
   await prisma.message.create({
     data: {
       tenantId,
       leadId: lead.id,
+      conversationId: conversation.id,
       direction: 'IN',
-      channel: body.channel,
+      channel: body.channel as any,
       body: customerMessage,
       raw: { botId: bot?.id ?? null }
     }
@@ -2380,7 +2912,7 @@ export async function handleIngestMessage(params: {
   // Trigger SLA monitoring
   const { triggerSlaMonitoring } = await import('./services/sla.js');
   
-  if (isNewLead) {
+  if (createdNewLead) {
     // New lead SLA
     await triggerSlaMonitoring({
       tenantId,
@@ -2470,7 +3002,8 @@ export async function handleIngestMessage(params: {
       select: { assignedToSalesmanId: true }
     });
 
-    if (!current?.assignedToSalesmanId) {
+    const shouldAutoAssign = body.channel !== 'PERSONAL_VISIT' && lead.channel !== 'PERSONAL_VISIT';
+    if (shouldAutoAssign && !current?.assignedToSalesmanId) {
       const picked = await pickSalesmanRoundRobin(prisma, tenantId, lead.id);
       if (picked) {
         await prisma.lead.update({ where: { id: lead.id }, data: { assignedToSalesmanId: picked.id } });
@@ -2500,8 +3033,9 @@ export async function handleIngestMessage(params: {
       data: {
         tenantId,
         leadId: lead.id,
+        conversationId: conversation.id,
         direction: 'OUT',
-        channel: body.channel,
+        channel: body.channel as any,
         body: draft.message,
         raw: { botId: bot?.id ?? null, simulated: true }
       }
@@ -3044,5 +3578,344 @@ routes.post(
     const body = ingestMessageSchema.parse(req.body);
     const out = await handleIngestMessage({ tenantId, body });
     res.json(out);
+  })
+);
+
+// Manual email polling trigger for testing
+routes.post(
+  '/admin/poll-emails',
+  asyncHandler(async (req, res) => {
+    const tenantId = getTenantId(req);
+    const { pollEmails } = await import('./services/email.js');
+    
+    const emails: any[] = [];
+    try {
+      await pollEmails(async (email) => {
+        console.log(`[Manual Poll] Received: ${email.from} - ${email.subject}`);
+        emails.push({ from: email.from, subject: email.subject });
+        await handleIngestMessage({
+          tenantId,
+          body: {
+            channel: 'EMAIL',
+            fullName: email.fromName,
+            email: email.from,
+            customerMessage: email.text,
+            externalId: email.messageId,
+          },
+        });
+      });
+      res.json({ success: true, emailsProcessed: emails.length, emails });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false, 
+        error: error?.message || 'Unknown error',
+        details: error?.stack
+      });
+    }
+  })
+);
+
+// Gmail Pub/Sub webhook - receives push notifications when new emails arrive
+routes.post(
+  '/webhooks/gmail',
+  asyncHandler(async (req, res) => {
+    try {
+      // Pub/Sub sends data in this format
+      const pubsubMessage = req.body.message;
+      
+      if (!pubsubMessage || !pubsubMessage.data) {
+        console.warn('[Gmail Webhook] Invalid payload - no message data');
+        res.status(400).json({ error: 'Invalid payload' });
+        return;
+      }
+
+      // Decode the Pub/Sub message
+      const data = JSON.parse(
+        Buffer.from(pubsubMessage.data, 'base64').toString('utf-8')
+      );
+
+      console.log('[Gmail Webhook] Received notification:', data);
+
+      // Get tenant ID from query param or use default
+      const tenantId = req.query.tenantId as string || process.env.DEFAULT_TENANT_ID;
+      if (!tenantId) {
+        console.warn('[Gmail Webhook] No tenant ID provided');
+        res.status(400).json({ error: 'Missing tenant ID' });
+        return;
+      }
+
+      console.log('[Gmail Webhook] Importing Gmail service...');
+      // Import Gmail service
+      const { fetchGmailMessage, markGmailMessageAsRead, listUnreadGmailMessages } = await import('./services/gmailPubSub.js');
+
+      console.log('[Gmail Webhook] Fetching unread messages...');
+      // Fetch the actual email content
+      // Note: Gmail Pub/Sub notification doesn't include full message, just historyId
+      // We need to fetch new messages using the Gmail API
+      
+      // For simplicity, we'll check for new UNREAD messages
+      // In production, you'd use the historyId to fetch only new messages
+      const messages = await listUnreadGmailMessages(10);
+
+      console.log(`[Gmail Webhook] Found ${messages.length} unread message(s)`);
+
+      let processed = 0;
+      let skipped = 0;
+
+      for (const msg of messages) {
+        try {
+          const email = await fetchGmailMessage(msg.id!);
+          
+          console.log(`[Gmail Webhook] Fetched email from: ${email.from} - Subject: ${email.subject}`);
+
+          // Smart enquiry detection - skip promotional/automated emails
+          const isEnquiry = isLikelyEnquiry(email);
+          
+          if (!isEnquiry) {
+            console.log(`[Gmail Webhook] Skipping non-enquiry email: ${email.subject}`);
+            await markGmailMessageAsRead(msg.id!);
+            skipped++;
+            continue;
+          }
+
+          // Check if we've already processed this email (duplicate prevention)
+          const existingLead = await prisma.lead.findFirst({
+            where: {
+              tenantId,
+              channel: 'EMAIL',
+              externalId: email.messageId,
+            },
+          });
+
+          if (existingLead) {
+            console.log(`[Gmail Webhook] Skipping duplicate email (already processed): ${email.messageId}`);
+            await markGmailMessageAsRead(msg.id!);
+            skipped++;
+            continue;
+          }
+
+          console.log(`[Gmail Webhook] Processing enquiry: ${email.from} - ${email.subject}`);
+
+          // Ingest into system
+          const result = await handleIngestMessage({
+            tenantId,
+            body: {
+              channel: 'EMAIL',
+              fullName: email.fromName,
+              email: email.from,
+              customerMessage: email.text,
+              externalId: email.messageId,
+            },
+          });
+
+          console.log(`[Gmail Webhook] handleIngestMessage result:`, JSON.stringify(result));
+
+          // Send email reply if draft was generated and not escalated
+          if (result.ok && result.draft && !result.draft.shouldEscalate) {
+            try {
+              const { sendGmailMessage } = await import('./services/gmailPubSub.js');
+              await sendGmailMessage({
+                to: email.from,
+                subject: `Re: ${email.subject}`,
+                text: result.draft.message,
+              });
+              console.log(`[Gmail Webhook] Sent email reply to ${email.from}`);
+            } catch (sendError: any) {
+              console.error(`[Gmail Webhook] Failed to send email reply:`, sendError.message);
+            }
+          }
+
+          // Mark as read
+          await markGmailMessageAsRead(msg.id!);
+          processed++;
+          console.log(`[Gmail Webhook] Successfully processed message ${msg.id}`);
+        } catch (error: any) {
+          console.error(`[Gmail Webhook] Failed to process message ${msg.id}:`, error.message, error.stack);
+        }
+      }
+
+      console.log(`[Gmail Webhook] Summary: ${processed} processed, ${skipped} skipped`);
+      res.status(200).json({ success: true, processed, skipped });
+    } catch (error: any) {
+      console.error('[Gmail Webhook] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  })
+);
+
+// Gmail debug endpoint - test the full flow
+routes.get(
+  '/admin/gmail-debug',
+  asyncHandler(async (req, res) => {
+    const tenantId = (req.query.tenantId as string) || process.env.DEFAULT_TENANT_ID || 'tenant_default';
+    const results: any = {
+      timestamp: new Date().toISOString(),
+      tenantId,
+      steps: [],
+    };
+
+    try {
+      // Step 1: Check environment variables
+      results.steps.push({
+        step: 'env_check',
+        GMAIL_CLIENT_ID: process.env.GMAIL_CLIENT_ID ? 'SET' : 'MISSING',
+        GMAIL_CLIENT_SECRET: process.env.GMAIL_CLIENT_SECRET ? 'SET' : 'MISSING',
+        GMAIL_REFRESH_TOKEN: process.env.GMAIL_REFRESH_TOKEN ? 'SET' : 'MISSING',
+        GMAIL_PUBSUB_TOPIC: process.env.GMAIL_PUBSUB_TOPIC || 'MISSING',
+      });
+
+      // Step 2: Import and check Gmail service
+      const { listUnreadGmailMessages, fetchGmailMessage, markGmailMessageAsRead } = await import('./services/gmailPubSub.js');
+      results.steps.push({ step: 'import_service', status: 'OK' });
+
+      // Step 3: List unread messages
+      const messages = await listUnreadGmailMessages(5);
+      results.steps.push({ step: 'list_messages', count: messages.length, messages: messages.map(m => m.id) });
+
+      if (messages.length > 0) {
+        // Step 4: Fetch first message details
+        const email = await fetchGmailMessage(messages[0].id!);
+        results.steps.push({
+          step: 'fetch_message',
+          id: messages[0].id,
+          from: email.from,
+          subject: email.subject,
+          textLength: email.text?.length || 0,
+        });
+
+        // Step 5: Check if it's an enquiry
+        const isEnquiry = isLikelyEnquiry(email);
+        results.steps.push({ step: 'enquiry_check', isEnquiry, from: email.from, subject: email.subject });
+
+        // Step 6: Try to create a lead (if enquiry)
+        if (isEnquiry) {
+          try {
+            const ingestResult = await handleIngestMessage({
+              tenantId,
+              body: {
+                channel: 'EMAIL',
+                fullName: email.fromName,
+                email: email.from,
+                customerMessage: email.text,
+                externalId: email.messageId,
+              },
+            });
+            results.steps.push({ step: 'ingest_message', status: 'OK', result: ingestResult });
+          } catch (ingestError: any) {
+            results.steps.push({ step: 'ingest_message', status: 'ERROR', error: ingestError.message });
+          }
+
+          // Step 7: Try to mark as read
+          try {
+            await markGmailMessageAsRead(messages[0].id!);
+            results.steps.push({ step: 'mark_as_read', status: 'OK', messageId: messages[0].id });
+          } catch (markError: any) {
+            results.steps.push({ step: 'mark_as_read', status: 'ERROR', error: markError.message });
+          }
+        }
+      }
+
+      results.success = true;
+    } catch (error: any) {
+      results.success = false;
+      results.error = error.message;
+      results.stack = error.stack;
+    }
+
+    res.json(results);
+  })
+);
+
+// Admin endpoint to delete all EMAIL leads and start fresh
+routes.delete(
+  '/admin/gmail-leads',
+  asyncHandler(async (req, res) => {
+    const { tenantId, role } = getAuthContext(req);
+    
+    // Only OWNER/ADMIN can do this
+    if (role !== 'OWNER' && role !== 'ADMIN') {
+      throw new HttpError(403, 'Only owners and admins can delete email leads');
+    }
+
+    // Get all EMAIL channel leads
+    const emailLeads = await prisma.lead.findMany({
+      where: { tenantId, channel: 'EMAIL' },
+      select: { id: true }
+    });
+
+    const leadIds = emailLeads.map(l => l.id);
+
+    // Delete all related data for these leads
+    await prisma.$transaction(async (tx) => {
+      await tx.triageQueueItem.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.successEvent.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.leadEvent.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.message.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.conversation.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.note.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.call.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.task.deleteMany({ where: { tenantId, leadId: { in: leadIds } } });
+      await tx.lead.deleteMany({ where: { id: { in: leadIds } } });
+    });
+
+    console.log(`[Gmail Admin] Deleted ${leadIds.length} email leads for tenant ${tenantId}`);
+
+    res.json({ ok: true, deletedCount: leadIds.length });
+  })
+);
+
+// Gmail OAuth2 setup helper - get authorization URL
+routes.get(
+  '/admin/gmail-auth-url',
+  asyncHandler(async (req, res) => {
+    const { google } = await import('googleapis');
+    
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_REDIRECT_URI || 'http://localhost:4000/admin/gmail-callback'
+    );
+
+    const scopes = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.modify',
+    ];
+
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      prompt: 'consent',
+    });
+
+    res.json({ authUrl });
+  })
+);
+
+// Gmail OAuth2 callback - exchange code for tokens
+routes.get(
+  '/admin/gmail-callback',
+  asyncHandler(async (req, res) => {
+    const code = req.query.code as string;
+    if (!code) {
+      res.status(400).json({ error: 'Missing authorization code' });
+      return;
+    }
+
+    const { google } = await import('googleapis');
+    
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_REDIRECT_URI || 'http://localhost:4000/admin/gmail-callback'
+    );
+
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    res.json({ 
+      message: 'Authorization successful! Save this refresh_token in your .env file',
+      refresh_token: tokens.refresh_token,
+      tokens 
+    });
   })
 );

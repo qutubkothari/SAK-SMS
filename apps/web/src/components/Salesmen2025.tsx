@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users, TrendingUp, Target, Award, Mail, Edit2, Save, X } from 'lucide-react'
+import { Users, TrendingUp, Target, Award, Mail, Edit2, Save, X, UserPlus, Settings } from 'lucide-react'
 
 type Salesman = {
   id: string
@@ -7,6 +7,9 @@ type Salesman = {
   username: string
   role: string
   isActive: boolean
+  minLeadsPerMonth?: number
+  maxLeadsPerMonth?: number
+  useIntelligentOverride?: boolean
   stats?: {
     totalLeads?: number
     activeLeads?: number
@@ -17,23 +20,41 @@ type Salesman = {
 
 type Salesmen2025Props = {
   salesmen: Salesman[]
-  onUpdate: (id: string, updates: { displayName: string; isActive: boolean }) => Promise<void>
+  onUpdate: (id: string, updates: { displayName: string; isActive: boolean; minLeadsPerMonth?: number; maxLeadsPerMonth?: number; useIntelligentOverride?: boolean }) => Promise<void>
+  onCreate: (salesman: { displayName: string; username: string; password: string; role: string }) => Promise<void>
   onRefresh: () => void
 }
 
-export function Salesmen2025({ salesmen, onUpdate, onRefresh }: Salesmen2025Props) {
+export function Salesmen2025({ salesmen, onUpdate, onCreate, onRefresh }: Salesmen2025Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editActive, setEditActive] = useState(false)
+  const [editMinLeads, setEditMinLeads] = useState(0)
+  const [editMaxLeads, setEditMaxLeads] = useState(0)
+  const [editIntelligentOverride, setEditIntelligentOverride] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newUsername, setNewUsername] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newRole, setNewRole] = useState('SALESPERSON')
 
   const handleEdit = (salesman: Salesman) => {
     setEditingId(salesman.id)
     setEditName(salesman.displayName)
     setEditActive(salesman.isActive)
+    setEditMinLeads(salesman.minLeadsPerMonth || 0)
+    setEditMaxLeads(salesman.maxLeadsPerMonth || 0)
+    setEditIntelligentOverride(salesman.useIntelligentOverride || false)
   }
 
   const handleSave = async (id: string) => {
-    await onUpdate(id, { displayName: editName, isActive: editActive })
+    await onUpdate(id, { 
+      displayName: editName, 
+      isActive: editActive,
+      minLeadsPerMonth: editMinLeads,
+      maxLeadsPerMonth: editMaxLeads,
+      useIntelligentOverride: editIntelligentOverride
+    })
     setEditingId(null)
   }
 
@@ -41,6 +62,25 @@ export function Salesmen2025({ salesmen, onUpdate, onRefresh }: Salesmen2025Prop
     setEditingId(null)
     setEditName('')
     setEditActive(false)
+    setEditMinLeads(0)
+    setEditMaxLeads(0)
+    setEditIntelligentOverride(false)
+  }
+
+  const handleCreate = async () => {
+    if (!newName || !newUsername || !newPassword) return
+    await onCreate({
+      displayName: newName,
+      username: newUsername,
+      password: newPassword,
+      role: newRole
+    })
+    setShowCreateModal(false)
+    setNewName('')
+    setNewUsername('')
+    setNewPassword('')
+    setNewRole('SALESPERSON')
+    onRefresh()
   }
 
   return (
@@ -53,12 +93,21 @@ export function Salesmen2025({ salesmen, onUpdate, onRefresh }: Salesmen2025Prop
           </h1>
           <p className="text-slate-600 mt-1">Manage your sales team and track performance</p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="px-6 py-3 bg-gradient-to-r from-mint-500 to-mint-600 text-white rounded-xl hover:shadow-mint-lg transform hover:scale-105 transition-all duration-200 font-medium"
-        >
-          Refresh
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:shadow-purple-lg transform hover:scale-105 transition-all duration-200 font-medium flex items-center gap-2"
+          >
+            <UserPlus className="w-5 h-5" />
+            Add Salesman
+          </button>
+          <button
+            onClick={onRefresh}
+            className="px-6 py-3 bg-gradient-to-r from-mint-500 to-mint-600 text-white rounded-xl hover:shadow-mint-lg transform hover:scale-105 transition-all duration-200 font-medium"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Overview */}
@@ -180,6 +229,48 @@ export function Salesmen2025({ salesmen, onUpdate, onRefresh }: Salesmen2025Prop
                       />
                       <span className="text-sm text-slate-700">Active</span>
                     </label>
+                    
+                    <div className="border-t border-slate-200 pt-3 mt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Settings className="w-4 h-4 text-slate-600" />
+                        <span className="text-sm font-medium text-slate-700">Lead Allocation</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                          <label className="text-xs text-slate-600 mb-1 block">Min/Month</label>
+                          <input
+                            type="number"
+                            value={editMinLeads}
+                            onChange={(e) => setEditMinLeads(parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-500 text-sm"
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-600 mb-1 block">Max/Month</label>
+                          <input
+                            type="number"
+                            value={editMaxLeads}
+                            onChange={(e) => setEditMaxLeads(parseInt(e.target.value) || 0)}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint-500 text-sm"
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer bg-purple-50 p-2 rounded-lg border border-purple-200">
+                        <input
+                          type="checkbox"
+                          checked={editIntelligentOverride}
+                          onChange={(e) => setEditIntelligentOverride(e.target.checked)}
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-xs text-purple-700">
+                          <strong>Intelligent Override:</strong> Allow AI to exceed max based on performance
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 ) : (
                   <div className="mb-4">
@@ -290,6 +381,97 @@ export function Salesmen2025({ salesmen, onUpdate, onRefresh }: Salesmen2025Prop
           <Users className="w-16 h-16 text-slate-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-slate-900 mb-2">No Salesmen Yet</h3>
           <p className="text-slate-600">Add salesmen to start managing your sales team.</p>
+        </div>
+      )}
+
+      {/* Create Salesman Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-soft-2xl p-8 max-w-md w-full m-4 animate-scale-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                Add New Salesman
+              </h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Display Name *
+                </label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Username/Email *
+                </label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="john.doe@company.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Password *
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="SALESPERSON">Salesperson</option>
+                  <option value="MANAGER">Manager</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-6 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!newName || !newUsername || !newPassword}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:shadow-purple-lg transform hover:scale-105 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                Create
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

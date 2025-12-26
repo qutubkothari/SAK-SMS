@@ -20,6 +20,11 @@ enum LeadChannel {
   FACEBOOK
   INSTAGRAM
   INDIAMART
+  JUSTDIAL
+  GEM
+  PHONE
+  EMAIL
+  PERSONAL_VISIT
   OTHER
 }
 
@@ -101,7 +106,9 @@ model Tenant {
   users     User[]
   salesmen  Salesman[]
   bots      Bot[]
+  clients   Client[]
   leads     Lead[]
+  conversations Conversation[]
   successDefinitions SuccessDefinition[]
   successEvents      SuccessEvent[]
   messageTemplates   MessageTemplate[]
@@ -110,6 +117,26 @@ model Tenant {
 
   aiConfig  TenantAiConfig?
   assignmentConfig AssignmentConfig?
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyName String?
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  leads       Lead[]
+
+  @@unique([tenantId, phone])
+  @@unique([tenantId, email])
+  @@index([tenantId])
 }
 
 model TenantAiConfig {
@@ -178,6 +205,9 @@ model Salesman {
   isActive  Boolean  @default(true)
   score     Float    @default(0)
   capacity  Int      @default(0)
+  minLeadsPerMonth Int @default(0)
+  maxLeadsPerMonth Int @default(0)
+  useIntelligentOverride Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -210,6 +240,7 @@ model Bot {
 model Lead {
   id          String     @id @default(cuid())
   tenantId    String
+  clientId    String?
   channel     LeadChannel
   externalId  String?
   fullName    String?
@@ -228,7 +259,10 @@ model Lead {
   updatedAt    DateTime @updatedAt
 
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  client       Client?  @relation(fields: [clientId], references: [id])
   assignee     Salesman? @relation("LeadAssignee", fields: [assignedToSalesmanId], references: [id])
+
+  conversation Conversation?
 
   events       LeadEvent[]
   messages     Message[]
@@ -242,6 +276,26 @@ model Lead {
   @@index([tenantId])
   @@index([tenantId, channel])
   @@index([tenantId, assignedToSalesmanId])
+  @@index([tenantId, clientId])
+}
+
+model Conversation {
+  id            String      @id @default(cuid())
+  tenantId      String
+  leadId        String      @unique
+  channel       LeadChannel
+  status        String      @default("OPEN") // OPEN | CLOSED
+  lastMessageAt DateTime?
+  extracted     Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  lead          Lead        @relation(fields: [leadId], references: [id])
+  messages      Message[]
+
+  @@index([tenantId])
+  @@index([tenantId, lastMessageAt])
 }
 
 model SuccessDefinition {
@@ -301,6 +355,7 @@ model Message {
   id        String   @id @default(cuid())
   tenantId  String
   leadId    String
+  conversationId String?
   direction String // IN | OUT
   channel   LeadChannel
   body      String
@@ -308,9 +363,11 @@ model Message {
   createdAt DateTime @default(now())
 
   lead      Lead     @relation(fields: [leadId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, leadId])
+  @@index([tenantId, conversationId])
 }
 
 model TriageQueueItem {

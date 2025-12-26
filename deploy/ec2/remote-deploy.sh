@@ -60,10 +60,10 @@ npm run -ws build
 
 echo "==> Publish web to Nginx"
 if command -v sudo >/dev/null 2>&1; then
-  sudo mkdir -p /var/www/sak-sms
+  sudo mkdir -p /var/www/html
   # Replace contents atomically-ish
-  sudo rm -rf /var/www/sak-sms/*
-  sudo cp -r apps/web/dist/* /var/www/sak-sms/
+  sudo rm -rf /var/www/html/*
+  sudo cp -r apps/web/dist/* /var/www/html/
 
   if [ -f "deploy/ec2/nginx-site.conf" ]; then
     sudo cp deploy/ec2/nginx-site.conf /etc/nginx/sites-available/sak-sms

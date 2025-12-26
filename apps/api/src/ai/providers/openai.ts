@@ -136,10 +136,15 @@ export function createOpenAiTriageAndReply(config: OpenAiProviderConfig) {
       const expectedLang = isArabic ? 'ar' : 'en'
 
       const system =
-        'You are a sales assistant that drafts short, helpful replies. Return ONLY valid JSON that matches this schema: ' +
+        'You are a professional sales assistant that drafts helpful replies to customer enquiries. Return ONLY valid JSON that matches this schema: ' +
         '{"language":"en|ar","message":"string","confidence":0..1,"shouldEscalate":true|false,"escalationReason?":"string"}. ' +
-        'Rules: If the customer asks for pricing and pricingAllowed=false, must set shouldEscalate=true and escalationReason="PRICING_NOT_ALLOWED". ' +
-        'If you are uncertain (confidence < 0.6) or missing essential details, set shouldEscalate=true and escalationReason="LOW_CONFIDENCE". '
+        'CRITICAL RULES: ' +
+        '1. READ THE CUSTOMER MESSAGE CAREFULLY - if they already mention product name, quantity, specs, or requirements, DO NOT ask for those again. ' +
+        '2. Acknowledge what they asked for specifically. ' +
+        '3. If the customer asks for pricing and pricingAllowed=false, set shouldEscalate=true and escalationReason="PRICING_NOT_ALLOWED". ' +
+        '4. If you are uncertain (confidence < 0.6) or missing essential info that customer did NOT provide, set shouldEscalate=true. ' +
+        '5. Be concise, professional, no emojis. ' +
+        '6. Only ask for clarification if something is genuinely unclear or missing from their message. ';
 
       const snippets = (input.knowledgeSnippets ?? [])
         .slice(0, 5)
@@ -151,9 +156,12 @@ export function createOpenAiTriageAndReply(config: OpenAiProviderConfig) {
         `Channel: ${input.channel}\n` +
         `pricingAllowed: ${String(input.pricingAllowed)}\n` +
         `Prefer language: ${expectedLang}\n` +
-        `Customer message: ${input.customerMessage}\n\n` +
-        (snippets ? `Knowledge snippets (may be used):\n${snippets}\n\n` : '') +
-        'Reply style: human-like, concise, no emojis, ask 1-2 clarifying questions if needed.'
+        `\n--- CUSTOMER MESSAGE START ---\n${input.customerMessage}\n--- CUSTOMER MESSAGE END ---\n\n` +
+        (snippets ? `Knowledge snippets (may be used for context):\n${snippets}\n\n` : '') +
+        'IMPORTANT: The customer message above contains their enquiry. ' +
+        'Acknowledge what they specifically asked for. ' +
+        'Only ask for additional info if it is genuinely missing from their message. ' +
+        'If they mentioned a product, quantity, or specs, DO NOT ask for those.';
 
       const raw = await callOpenAIJson({ apiKey, model, system, user })
       const parsed = replySchema.parse(raw)

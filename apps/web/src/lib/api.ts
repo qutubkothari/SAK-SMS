@@ -240,6 +240,18 @@ export async function getLead(id: string) {
   return request<{ lead: any }>(`/leads/${id}`)
 }
 
+export async function deleteLead(id: string) {
+  return request<{ ok: true; deletedLeadId: string }>(`/leads/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function deleteAllEmailLeads() {
+  return request<{ ok: true; deletedCount: number }>(`/admin/gmail-leads`, {
+    method: 'DELETE'
+  })
+}
+
 export async function updateLeadStatus(id: string, status: string) {
   return request<{ ok: true }>(`/leads/${id}/status`, {
     method: 'POST',
@@ -251,7 +263,11 @@ export async function listSalesmen() {
   return request<{ salesmen: Salesman[] }>('/salesmen')
 }
 
-export async function updateSalesman(id: string, payload: Partial<Pick<Salesman, 'score' | 'capacity' | 'isActive'>>) {
+export async function createSalesman(payload: { displayName: string; username: string; password: string; role: string }) {
+  return request<{ salesman: Salesman }>('/salesmen', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateSalesman(id: string, payload: any) {
   return request<{ ok: true }>(`/salesmen/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 

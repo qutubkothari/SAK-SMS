@@ -21,6 +21,7 @@ interface Leads2025Props {
   leads: Lead[]
   onRefresh: () => void
   onExport?: () => void
+  onDelete?: (leadId: string) => Promise<void>
 }
 
 const heatConfig: Record<string, { gradient: string; label: string }> = {
@@ -48,16 +49,20 @@ const channelIcons: Record<string, any> = {
   'PHONE': Phone,
   'EMAIL': Mail,
   'INDIAMART': MessageSquare,
+  'JUSTDIAL': MessageSquare,
+  'GEM': MessageSquare,
+  'PERSONAL_VISIT': PhoneCall,
   'MANUAL': Phone,
   'OTHER': MessageSquare,
 }
 
-export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
+export function Leads2025({ leads, onRefresh, onExport, onDelete }: Leads2025Props) {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Close menu when clicking outside
@@ -331,19 +336,29 @@ export function Leads2025({ leads, onRefresh, onExport }: Leads2025Props) {
                         <div className="h-px bg-slate-200 my-1" />
                         
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            if (confirm(`Archive lead: ${lead.fullName || lead.phone}?`)) {
-                              // TODO: Implement archive/delete
-                              console.log('Archive lead:', lead.id)
+                            if (confirm(`Delete lead: ${lead.fullName || lead.phone || lead.email}?\n\nThis will permanently delete all messages, notes, and history for this lead.`)) {
+                              if (onDelete) {
+                                setDeletingId(lead.id)
+                                try {
+                                  await onDelete(lead.id)
+                                  onRefresh()
+                                } catch (err: any) {
+                                  alert('Failed to delete: ' + (err.message || 'Unknown error'))
+                                } finally {
+                                  setDeletingId(null)
+                                }
+                              }
                             }
                             setOpenMenuId(null)
                           }}
-                          className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"
+                          disabled={deletingId === lead.id}
+                          className="w-full px-4 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-sm text-red-600 disabled:opacity-50"
                         >
                           <Trash2 className="w-4 h-4" />
-                          Archive Lead
+                          {deletingId === lead.id ? 'Deleting...' : 'Delete Lead'}
                         </button>
                       </div>
                     )}

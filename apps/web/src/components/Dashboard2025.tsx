@@ -268,7 +268,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             value={stats.totalLeads}
             icon={Users}
             gradient="from-mint-500 to-mint-600"
-            trend="+12.5%"
             delay={0}
           />
           <BentoCard
@@ -276,7 +275,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             value={stats.newLeads}
             icon={UserPlus}
             gradient="from-lemon-400 to-lemon-500"
-            trend="+8.2%"
             delay={100}
           />
           <BentoCard
@@ -284,7 +282,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             value={stats.activeLeads}
             icon={Activity}
             gradient="from-purple-500 to-pink-500"
-            trend="+5.3%"
             delay={200}
           />
           <BentoCard
@@ -292,7 +289,6 @@ export function Dashboard2025({ onError }: Dashboard2025Props) {
             value={stats.convertedLeads}
             icon={CheckCircle}
             gradient="from-emerald-500 to-green-500"
-            trend="+15.7%"
             delay={300}
           />
           <BentoCard

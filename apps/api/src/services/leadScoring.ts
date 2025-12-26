@@ -167,9 +167,14 @@ async function getSourceQualityScore(tenantId: string, channel: LeadChannel, hea
   // Premium channels get higher base score
   const channelScore: Record<LeadChannel, number> = {
     'INDIAMART': 12,
+    'JUSTDIAL': 9,
+    'GEM': 12,
     'WHATSAPP': 10,
     'FACEBOOK': 8,
     'INSTAGRAM': 8,
+    'PHONE': 11,
+    'EMAIL': 7,
+    'PERSONAL_VISIT': 15,
     'MANUAL': 15, // Direct leads often high quality
     'OTHER': 5
   };

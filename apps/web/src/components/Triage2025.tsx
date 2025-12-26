@@ -52,8 +52,14 @@ const channelIcons: Record<string, string> = {
   WHATSAPP: '💬',
   FACEBOOK: '👍',
   INSTAGRAM: '📷',
+  INDIAMART: '🛒',
+  JUSTDIAL: '📇',
+  GEM: '🏛️',
   PHONE: '📞',
   EMAIL: '📧',
+  PERSONAL_VISIT: '🤝',
+  MANUAL: '✍️',
+  OTHER: '❓',
   WEB: '🌐',
 }
 

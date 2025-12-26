@@ -15,6 +15,7 @@ interface AppLayout2025Props {
 export function AppLayout2025({ children, user, onLogout }: AppLayout2025Props) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -70,9 +71,39 @@ export function AppLayout2025({ children, user, onLogout }: AppLayout2025Props) 
               
               {/* More Menu */}
               <div className="relative">
-                <button className="px-4 py-2 rounded-xl font-medium text-slate-600 hover:bg-white/50 transition-all">
+                <button 
+                  onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all ${
+                    moreMenuOpen ? 'bg-mint-500 text-white' : 'text-slate-600 hover:bg-white/50'
+                  }`}
+                >
                   More
                 </button>
+                
+                {moreMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setMoreMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white/90 backdrop-blur-md rounded-2xl shadow-soft-lg border border-white/20 p-2 z-50 animate-scale-in">
+                      {navItems.slice(6).map((item) => (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          onClick={() => setMoreMenuOpen(false)}
+                          className={`flex items-center space-x-2 px-3 py-2 rounded-xl transition-colors ${
+                            isActive(item.to)
+                              ? 'bg-mint-50 text-mint-700 font-medium'
+                              : 'text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="text-sm">{item.label}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

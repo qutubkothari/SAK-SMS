@@ -13,14 +13,16 @@ import { AuditLogs2025 } from './components/AuditLogs2025'
 import { Success2025 } from './components/Success2025'
 import { Settings2025 } from './components/Settings2025'
 import { AI2025 } from './components/AI2025'
+import { LeadDetail2025 } from './components/LeadDetail2025'
+import { Bots2025 } from './components/Bots2025'
+import { Ingest2025 } from './components/Ingest2025'
 import {
   authMode,
-  assignLead,
+  // assignLead,
   assignTriageItem,
   bulkAssignLeads,
   bulkUpdateLeadStatus,
   closeTriageItem,
-  createBot,
   createSuccessDefinition,
   devBootstrap,
   devSeed,
@@ -30,21 +32,19 @@ import {
   getSuccessAnalytics,
   getAiConfig,
   getLead,
-  getLeadNotes,
-  addLeadNote,
-  getLeadCalls,
-  logCall,
-  getLeadTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-  listMessageTemplates,
+  // getLeadNotes,
+  // addLeadNote,
+  // getLeadCalls,
+  // logCall,
+  // getLeadTasks,
+  // createTask,
+  // updateTask,
+  // deleteTask,
+  // listMessageTemplates,
   sendLeadMessage,
   importLeadsCsv,
-  ingestMessage,
   listNotifications,
   listLeads,
-  listBots,
   listSalesmen,
   listSuccessDefinitions,
   listTriage,
@@ -54,14 +54,14 @@ import {
   markNotificationRead,
   me,
   recomputeScores,
-  recordLeadSuccess,
+  // recordLeadSuccess,
   saveDevAuth,
   reopenTriageItem,
   type Notification,
   // type TriageStatusFilter,  // Unused in new Triage2025
   type SessionUser,
   updateAiConfig,
-  updateBot,
+  createSalesman,
   updateSalesman,
   updateSuccessDefinition,
   updateLeadStatus
@@ -660,230 +660,11 @@ function AiPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m:
 }
 
 function BotsPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
-  const [bots, setBots] = useState<any[]>([])
-  const [name, setName] = useState('Sales Assistant')
-  const [department, setDepartment] = useState('General')
-  const [productTag, setProductTag] = useState('')
-  const [pricingMode, setPricingMode] = useState<'ROUTE' | 'STANDARD'>('ROUTE')
-
-  async function refresh() {
-    try {
-      const out = await listBots()
-      setBots(out.bots)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed')
-    }
-  }
-
-  useEffect(() => {
-    refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  return (
-    <div style={{ padding: 12 }}>
-      <h2 style={{ marginTop: 0 }}>Bots</h2>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bot name" />
-          <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Department" />
-          <input value={productTag} onChange={(e) => setProductTag(e.target.value)} placeholder="Product tag (optional)" />
-          <select value={pricingMode} onChange={(e) => setPricingMode(e.target.value as any)}>
-            <option value="ROUTE">Pricing: Route</option>
-            <option value="STANDARD">Pricing: Standard</option>
-          </select>
-          <button
-            onClick={async () => {
-              try {
-                await createBot({
-                  name,
-                  department: department || undefined,
-                  productTag: productTag || undefined,
-                  pricingMode
-                })
-                onInfo('Bot created')
-                await refresh()
-              } catch (err) {
-                onError(err instanceof Error ? err.message : 'Failed')
-              }
-            }}
-          >
-            Create
-          </button>
-          <button onClick={refresh}>Refresh</button>
-        </div>
-      </div>
-
-      <table style={{ marginTop: 12 }}>
-        <thead>
-          <tr>
-            <th align="left">Name</th>
-            <th align="left">Department</th>
-            <th align="left">Product</th>
-            <th align="left">Pricing</th>
-            <th align="left">Active</th>
-            <th align="left">Indicators</th>
-            <th align="left"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {bots.map((b) => (
-            <tr key={b.id}>
-              <td style={{ minWidth: 220 }}>
-                <input
-                  value={b.name}
-                  onChange={(e) => setBots((prev) => prev.map((p) => (p.id === b.id ? { ...p, name: e.target.value } : p)))}
-                />
-              </td>
-              <td style={{ minWidth: 180 }}>
-                <input
-                  value={b.department ?? ''}
-                  onChange={(e) =>
-                    setBots((prev) => prev.map((p) => (p.id === b.id ? { ...p, department: e.target.value } : p)))
-                  }
-                  placeholder=""
-                />
-              </td>
-              <td style={{ minWidth: 160 }}>
-                <input
-                  value={b.productTag ?? ''}
-                  onChange={(e) =>
-                    setBots((prev) => prev.map((p) => (p.id === b.id ? { ...p, productTag: e.target.value } : p)))
-                  }
-                  placeholder=""
-                />
-              </td>
-              <td>
-                <select
-                  value={b.pricingMode}
-                  onChange={(e) =>
-                    setBots((prev) => prev.map((p) => (p.id === b.id ? { ...p, pricingMode: e.target.value } : p)))
-                  }
-                >
-                  <option value="ROUTE">ROUTE</option>
-                  <option value="STANDARD">STANDARD</option>
-                </select>
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(b.isActive)}
-                  onChange={(e) =>
-                    setBots((prev) => prev.map((p) => (p.id === b.id ? { ...p, isActive: e.target.checked } : p)))
-                  }
-                />
-              </td>
-              <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Badge kind={b.isActive ? 'ok' : 'muted'} text={b.isActive ? 'ACTIVE' : 'INACTIVE'} />
-                <Badge kind={b.pricingMode === 'STANDARD' ? 'warn' : 'muted'} text={b.pricingMode} />
-              </td>
-              <td>
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateBot(b.id, {
-                        name: b.name,
-                        department: b.department === '' ? null : b.department,
-                        productTag: b.productTag === '' ? null : b.productTag,
-                        pricingMode: b.pricingMode,
-                        isActive: Boolean(b.isActive)
-                      })
-                      onInfo('Bot saved')
-                      await refresh()
-                    } catch (err) {
-                      onError(err instanceof Error ? err.message : 'Failed')
-                    }
-                  }}
-                >
-                  Save
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {bots.length === 0 ? <div style={{ marginTop: 12, opacity: 0.8 }}>No bots yet.</div> : null}
-    </div>
-  )
+  return <Bots2025 onError={onError} onInfo={onInfo} />
 }
 
 function IngestPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
-  const [bots, setBots] = useState<any[]>([])
-  const [botId, setBotId] = useState<string>('')
-  const [channel, setChannel] = useState('WHATSAPP')
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('+971500000009')
-  const [message, setMessage] = useState('Hi, need price and delivery ASAP')
-
-  useEffect(() => {
-    ;(async () => {
-      try {
-        const out = await listBots()
-        setBots(out.bots)
-      } catch {
-        // ignore
-      }
-    })()
-  }, [])
-
-  return (
-    <div style={{ padding: 12 }}>
-      <div className="sak-card" style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0 }}>Ingest (simulate channel message)</h2>
-          <Badge kind={channel === 'WHATSAPP' ? 'ok' : channel === 'INDIAMART' ? 'warn' : 'muted'} text={`CHANNEL ${channel}`} />
-          <Badge kind={botId ? 'ok' : 'muted'} text={botId ? 'BOT SELECTED' : 'NO BOT'} />
-        </div>
-
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={botId} onChange={(e) => setBotId(e.target.value)}>
-            <option value="">(no bot)</option>
-            {bots.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)}>
-            {['WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'INDIAMART', 'MANUAL', 'OTHER'].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name (optional)" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (optional)" />
-        </div>
-
-        <div style={{ marginTop: 8 }}>
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} style={{ width: '100%' }} />
-        </div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-          <button
-            onClick={async () => {
-              try {
-                const out = await ingestMessage({
-                  botId: botId || undefined,
-                  channel,
-                  fullName: fullName || undefined,
-                  phone: phone || undefined,
-                  customerMessage: message
-                })
-                onInfo(`Ingested. Lead: ${out.leadId}`)
-              } catch (err) {
-                onError(err instanceof Error ? err.message : 'Failed')
-              }
-            }}
-          >
-            Send inbound message
-          </button>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-          This stores IN/OUT messages in DB and triggers AI triage + draft reply. If pricing isn’t allowed, it escalates to triage.
-        </div>
-      </div>
-    </div>
-  )
+  return <Ingest2025 onError={onError} onInfo={onInfo} />
 }
 
 function DevSetup({ onInfo, onError }: { onInfo: (m: string) => void; onError: (m: string) => void }) {
@@ -964,12 +745,17 @@ function LeadsPage({ onError }: { onError: (m: string) => void }) {
     }
   }
 
+  const handleDelete = async (leadId: string) => {
+    const { deleteLead } = await import('./lib/api')
+    await deleteLead(leadId)
+  }
+
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return <Leads2025 leads={leads} onRefresh={refresh} onExport={handleExport} />
+  return <Leads2025 leads={leads} onRefresh={refresh} onExport={handleExport} onDelete={handleDelete} />
 }
 
 // Keep old implementation for reference (DEPRECATED - remove after testing)
@@ -1362,40 +1148,11 @@ function LeadsPageOld({ onError }: { onError: (m: string) => void }) {
   )
 }
 
-function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => void; onInfo: (m: string) => void; role: string | null }) {
-  const { t } = useTranslation()
+// Modern Lead Detail Page using 2025 design
+function LeadDetailPage({ onError, onInfo }: { onError: (m: string) => void; onInfo: (m: string) => void }) {
   const params = useParams()
   const leadId = params.id ?? ''
   const [lead, setLead] = useState<any | null>(null)
-  const [salesmen, setSalesmen] = useState<any[]>([])
-  const [successDefs, setSuccessDefs] = useState<any[]>([])
-  const [selectedSuccessDefId, setSelectedSuccessDefId] = useState<string>('')
-  const [successNote, setSuccessNote] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'overview' | 'timeline' | 'notes' | 'tasks'>('overview')
-  const [notes, setNotes] = useState<any[]>([])
-  const [newNoteContent, setNewNoteContent] = useState<string>('')
-  const [showMessageModal, setShowMessageModal] = useState<boolean>(false)
-  const [messageChannel, setMessageChannel] = useState<string>('WHATSAPP')
-  const [messageContent, setMessageContent] = useState<string>('')
-  const [templates, setTemplates] = useState<any[]>([])
-  const [showCallModal, setShowCallModal] = useState<boolean>(false)
-  const [callDirection, setCallDirection] = useState<string>('OUTBOUND')
-  const [callOutcome, setCallOutcome] = useState<string>('ANSWERED')
-  const [callDuration, setCallDuration] = useState<string>('')
-  const [callNotes, setCallNotes] = useState<string>('')
-  const [callRecordingUrl, setCallRecordingUrl] = useState<string>('')
-  const [calls, setCalls] = useState<any[]>([])
-  const [showTaskModal, setShowTaskModal] = useState<boolean>(false)
-  const [taskTitle, setTaskTitle] = useState<string>('')
-  const [taskDescription, setTaskDescription] = useState<string>('')
-  const [taskDueDate, setTaskDueDate] = useState<string>('')
-  const [taskPriority, setTaskPriority] = useState<string>('MEDIUM')
-  const [tasks, setTasks] = useState<any[]>([])
-  const [editingTask, setEditingTask] = useState<any | null>(null)
-  const canAssign = useMemo(() => {
-    if (authMode() === 'dev_headers') return loadDevAuth().role !== 'SALESMAN'
-    return role !== 'SALESMAN'
-  }, [role])
 
   async function refresh() {
     try {
@@ -1406,940 +1163,37 @@ function LeadDetailPage({ onError, onInfo, role }: { onError: (m: string) => voi
     }
   }
 
-  async function refreshCalls() {
-    try {
-      const out = await getLeadCalls(leadId)
-      setCalls(out.calls)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed to load calls')
-    }
-  }
-
-  async function refreshTasks() {
-    try {
-      const out = await getLeadTasks(leadId)
-      setTasks(out.tasks)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed to load tasks')
-    }
-  }
-
-  async function refreshNotes() {
-    try {
-      const out = await getLeadNotes(leadId)
-      setNotes(out.notes)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed to load notes')
-    }
-  }
-
   useEffect(() => {
     refresh()
-    refreshNotes()
-    refreshCalls()
-    refreshTasks()
-    ;(async () => {
-      try {
-        if (canAssign) {
-          const [sm, defs, tmpl] = await Promise.all([listSalesmen(), listSuccessDefinitions(), listMessageTemplates()])
-          setSalesmen(sm.salesmen)
-          setSuccessDefs(defs.definitions)
-          setTemplates(tmpl.templates)
-          if (!selectedSuccessDefId && defs.definitions.length > 0) {
-            setSelectedSuccessDefId(defs.definitions[0].id)
-          }
-        } else {
-          const tmpl = await listMessageTemplates()
-          setTemplates(tmpl.templates)
-        }
-      } catch {
-        // ignore
-      }
-    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId])
 
-  // Build timeline from messages, events, triage items, success events, and calls
-  const timeline = useMemo(() => {
-    if (!lead) return []
-    const items: Array<{ time: Date; type: string; data: any }> = []
-    
-    ;(lead.messages ?? []).forEach((m: any) => {
-      items.push({ time: new Date(m.createdAt), type: 'message', data: m })
-    })
-    
-    ;(lead.events ?? []).forEach((e: any) => {
-      items.push({ time: new Date(e.createdAt), type: 'event', data: e })
-    })
-    
-    ;(lead.triageItems ?? []).forEach((t: any) => {
-      items.push({ time: new Date(t.createdAt), type: 'triage', data: t })
-    })
-    
-    ;(lead.successEvents ?? []).forEach((s: any) => {
-      items.push({ time: new Date(s.createdAt), type: 'success', data: s })
-    })
-    
-    calls.forEach((c: any) => {
-      items.push({ time: new Date(c.createdAt), type: 'call', data: c })
-    })
-    
-    return items.sort((a, b) => b.time.getTime() - a.time.getTime())
-  }, [lead, calls])
-
   if (!lead) return <div style={{ padding: 12 }}>Loading…</div>
 
+  // Use modern LeadDetail2025 component
   return (
-    <>
-      {/* Message Modal */}
-      {showMessageModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="sak-card" style={{
-            maxWidth: 600,
-            width: '90%',
-            padding: 24,
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Send Message</h3>
-              <button onClick={() => setShowMessageModal(false)}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Channel</label>
-              <select value={messageChannel} onChange={(e) => setMessageChannel(e.target.value)}>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="MANUAL">Manual/Other</option>
-                <option value="FACEBOOK">Facebook</option>
-                <option value="INSTAGRAM">Instagram</option>
-              </select>
-            </div>
-
-            {templates.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Use Template</label>
-                <select onChange={(e) => {
-                  const tmpl = templates.find(t => t.id === e.target.value)
-                  if (tmpl) setMessageContent(tmpl.content)
-                }}>
-                  <option value="">-- Select Template --</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Message</label>
-              <textarea
-                value={messageContent}
-                onChange={(e) => setMessageContent(e.target.value)}
-                rows={6}
-                style={{ width: '100%' }}
-                placeholder="Type your message..."
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowMessageModal(false)}>Cancel</button>
-              <button
-                className="primary"
-                onClick={async () => {
-                  if (!messageContent.trim()) return
-                  try {
-                    await sendLeadMessage(leadId, messageChannel, messageContent)
-                    setMessageContent('')
-                    setShowMessageModal(false)
-                    onInfo('Message sent')
-                    await refresh()
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : 'Failed to send message')
-                  }
-                }}
-                disabled={!messageContent.trim()}
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Call Modal */}
-      {showCallModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="sak-card" style={{
-            maxWidth: 600,
-            width: '90%',
-            padding: 24,
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Log Call</h3>
-              <button onClick={() => setShowCallModal(false)}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Direction</label>
-              <select value={callDirection} onChange={(e) => setCallDirection(e.target.value)}>
-                <option value="OUTBOUND">Outbound (You called them)</option>
-                <option value="INBOUND">Inbound (They called you)</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Outcome</label>
-              <select value={callOutcome} onChange={(e) => setCallOutcome(e.target.value)}>
-                <option value="ANSWERED">Answered</option>
-                <option value="NO_ANSWER">No Answer</option>
-                <option value="BUSY">Busy</option>
-                <option value="VOICEMAIL">Voicemail</option>
-                <option value="DISCONNECTED">Disconnected</option>
-                <option value="WRONG_NUMBER">Wrong Number</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Duration (seconds)</label>
-              <input
-                type="number"
-                value={callDuration}
-                onChange={(e) => setCallDuration(e.target.value)}
-                placeholder="Optional"
-                min="0"
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Notes</label>
-              <textarea
-                value={callNotes}
-                onChange={(e) => setCallNotes(e.target.value)}
-                rows={4}
-                style={{ width: '100%' }}
-                placeholder="Optional call notes..."
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Recording URL</label>
-              <input
-                type="url"
-                value={callRecordingUrl}
-                onChange={(e) => setCallRecordingUrl(e.target.value)}
-                placeholder="Optional recording URL"
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowCallModal(false)}>Cancel</button>
-              <button
-                className="primary"
-                onClick={async () => {
-                  try {
-                    await logCall(leadId, {
-                      direction: callDirection as any,
-                      outcome: callOutcome as any,
-                      duration: callDuration ? parseInt(callDuration) : undefined,
-                      notes: callNotes || undefined,
-                      recordingUrl: callRecordingUrl || undefined
-                    })
-                    setCallDirection('OUTBOUND')
-                    setCallOutcome('ANSWERED')
-                    setCallDuration('')
-                    setCallNotes('')
-                    setCallRecordingUrl('')
-                    setShowCallModal(false)
-                    onInfo('Call logged')
-                    await refreshCalls()
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : 'Failed to log call')
-                  }
-                }}
-              >
-                Save Call
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Task Modal */}
-      {showTaskModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="sak-card" style={{
-            maxWidth: 600,
-            width: '90%',
-            padding: 24,
-            maxHeight: '80vh',
-            overflow: 'auto'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h3>
-              <button onClick={() => setShowTaskModal(false)}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Title</label>
-              <input
-                type="text"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="Task title"
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Description</label>
-              <textarea
-                value={taskDescription}
-                onChange={(e) => setTaskDescription(e.target.value)}
-                rows={4}
-                style={{ width: '100%' }}
-                placeholder="Optional task description..."
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Due Date</label>
-              <input
-                type="datetime-local"
-                value={taskDueDate}
-                onChange={(e) => setTaskDueDate(e.target.value)}
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Priority</label>
-              <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="URGENT">Urgent</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowTaskModal(false)}>Cancel</button>
-              <button
-                className="primary"
-                onClick={async () => {
-                  if (!taskTitle.trim()) return
-                  try {
-                    if (editingTask) {
-                      await updateTask(editingTask.id, {
-                        title: taskTitle,
-                        description: taskDescription || undefined,
-                        dueDate: taskDueDate || null,
-                        priority: taskPriority as any
-                      })
-                      onInfo('Task updated')
-                    } else {
-                      await createTask(leadId, {
-                        title: taskTitle,
-                        description: taskDescription || undefined,
-                        dueDate: taskDueDate || undefined,
-                        priority: taskPriority as any
-                      })
-                      onInfo('Task created')
-                    }
-                    setTaskTitle('')
-                    setTaskDescription('')
-                    setTaskDueDate('')
-                    setTaskPriority('MEDIUM')
-                    setEditingTask(null)
-                    setShowTaskModal(false)
-                    await refreshTasks()
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : 'Failed to save task')
-                  }
-                }}
-                disabled={!taskTitle.trim()}
-              >
-                {editingTask ? 'Update Task' : 'Create Task'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    <div style={{ padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{lead.fullName ?? lead.phone ?? lead.id}</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setViewMode('overview')} style={{ fontWeight: viewMode === 'overview' ? 'bold' : 'normal' }}>
-            Overview
-          </button>
-          <button onClick={() => setViewMode('timeline')} style={{ fontWeight: viewMode === 'timeline' ? 'bold' : 'normal' }}>
-            Timeline
-          </button>
-          <button onClick={() => setViewMode('notes')} style={{ fontWeight: viewMode === 'notes' ? 'bold' : 'normal' }}>
-            Notes ({notes.length})
-          </button>
-          <button onClick={() => setViewMode('tasks')} style={{ fontWeight: viewMode === 'tasks' ? 'bold' : 'normal' }}>
-            Tasks ({tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length})
-          </button>
-        </div>
-      </div>
-
-      {/* Lead info card */}
-      <div className="sak-card" style={{ marginBottom: 12, padding: 12 }}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('channel')}</div>
-            <div>{lead.channel}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('status')}</div>
-            <div>
-              <Badge
-                kind={lead.status === 'WON' ? 'ok' : lead.status === 'LOST' ? 'danger' : lead.status === 'NEW' ? 'warn' : 'muted'}
-                text={lead.status}
-              />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('heat')}</div>
-            <div>
-              <Badge
-                kind={lead.heat === 'ON_FIRE' || lead.heat === 'VERY_HOT' ? 'danger' : lead.heat === 'HOT' ? 'warn' : 'muted'}
-                text={lead.heat}
-              />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>{t('assignedTo')}</div>
-            <div>{lead.assignedToSalesmanId ?? t('unassigned')}</div>
-          </div>
-          {lead.phone ? (
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Phone</div>
-              <div>{lead.phone}</div>
-            </div>
-          ) : null}
-          {lead.email ? (
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Email</div>
-              <div>{lead.email}</div>
-            </div>
-          ) : null}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Language</div>
-            <div>{lead.language}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Created</div>
-            <div style={{ fontSize: 13 }}>{new Date(lead.createdAt).toLocaleString()}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Updated</div>
-            <div style={{ fontSize: 13 }}>{new Date(lead.updatedAt).toLocaleString()}</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', paddingTop: 8, borderTop: '1px solid #e0e0e0' }}>
-          <button
-            className="primary"
-            onClick={() => setShowMessageModal(true)}
-            style={{ fontSize: 14 }}
-          >
-            📨 Send Message
-          </button>
-
-          <button
-            className="primary"
-            onClick={() => setShowCallModal(true)}
-            style={{ fontSize: 14 }}
-          >
-            📞 Log Call
-          </button>
-
-          <button
-            className="primary"
-            onClick={() => {
-              setEditingTask(null)
-              setTaskTitle('')
-              setTaskDescription('')
-              setTaskDueDate('')
-              setTaskPriority('MEDIUM')
-              setShowTaskModal(true)
-            }}
-            style={{ fontSize: 14 }}
-          >
-            ✅ Add Task
-          </button>
-
-          <label>
-            {t('updateStatus')}:
-            <select
-              value={lead.status}
-              onChange={async (e) => {
-                try {
-                  await updateLeadStatus(lead.id, e.target.value)
-                  onInfo('Status updated')
-                  await refresh()
-                } catch (err) {
-                  onError(err instanceof Error ? err.message : 'Failed')
-                }
-              }}
-              style={{ marginLeft: 8 }}
-            >
-              {['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST', 'ON_HOLD'].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {canAssign ? (
-            <label>
-              {t('assign')}:
-              <select
-                value={lead.assignedToSalesmanId ?? ''}
-                onChange={async (e) => {
-                  try {
-                    const value = e.target.value
-                    await assignLead(lead.id, value === '' ? null : value)
-                    onInfo('Assignment updated')
-                    await refresh()
-                  } catch (err) {
-                    onError(err instanceof Error ? err.message : 'Failed')
-                  }
-                }}
-                style={{ marginLeft: 8 }}
-              >
-                <option value="">{t('unassigned')}</option>
-                {salesmen.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-        </div>
-      </div>
-
-      {viewMode === 'timeline' ? (
-        <div>
-          <h3 style={{ marginTop: 0 }}>Activity Timeline</h3>
-          {timeline.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No activity yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {timeline.map((item, idx) => (
-                <div key={idx} className="sak-card" style={{ padding: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Badge
-                      kind={
-                        item.type === 'message'
-                          ? item.data.direction === 'IN'
-                            ? 'warn'
-                            : 'ok'
-                          : item.type === 'success'
-                          ? 'ok'
-                          : item.type === 'triage' && item.data.status === 'OPEN'
-                          ? 'danger'
-                          : 'muted'
-                      }
-                      text={item.type.toUpperCase()}
-                    />
-                    <span style={{ fontSize: 13, opacity: 0.7 }}>{item.time.toLocaleString()}</span>
-                  </div>
-                  {item.type === 'message' ? (
-                    <div>
-                      <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
-                        {item.data.direction} • {item.data.channel}
-                      </div>
-                      <div>{item.data.body}</div>
-                    </div>
-                  ) : item.type === 'event' ? (
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>{item.data.type}</div>
-                      <pre style={{ fontSize: 11, opacity: 0.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                        {JSON.stringify(item.data.payload, null, 2)}
-                      </pre>
-                    </div>
-                  ) : item.type === 'triage' ? (
-                    <div>
-                      <div>
-                        <Badge
-                          kind={item.data.status === 'OPEN' ? 'warn' : item.data.status === 'CLOSED' ? 'ok' : 'muted'}
-                          text={item.data.status}
-                        />{' '}
-                        • {item.data.reason}
-                      </div>
-                      {item.data.suggestedSalesmanId ? (
-                        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                          Suggested: {item.data.suggestedSalesmanId}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : item.type === 'success' ? (
-                    <div>
-                      <div>
-                        {item.data.type} • weight {item.data.weight}
-                      </div>
-                      {item.data.salesmanId ? (
-                        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>Salesman: {item.data.salesmanId}</div>
-                      ) : null}
-                      {item.data.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{item.data.note}</div> : null}
-                    </div>
-                  ) : item.type === 'call' ? (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>📞</span>
-                        <Badge
-                          kind={
-                            item.data.outcome === 'ANSWERED' ? 'ok' : 
-                            item.data.outcome === 'NO_ANSWER' || item.data.outcome === 'BUSY' ? 'warn' : 
-                            'danger'
-                          }
-                          text={item.data.outcome.replace('_', ' ')}
-                        />
-                        {item.data.duration && (
-                          <span style={{ fontSize: 13, opacity: 0.7 }}>
-                            {Math.floor(item.data.duration / 60)}:{(item.data.duration % 60).toString().padStart(2, '0')}
-                          </span>
-                        )}
-                      </div>
-                      {item.data.notes && (
-                        <div style={{ marginTop: 4, opacity: 0.9, fontSize: 14 }}>{item.data.notes}</div>
-                      )}
-                      {item.data.recordingUrl && (
-                        <a href={item.data.recordingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, marginTop: 4, display: 'block' }}>
-                          🎧 Listen to recording
-                        </a>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : viewMode === 'notes' ? (
-        <div>
-          <h3 style={{ marginTop: 0 }}>Notes & Activity</h3>
-          
-          <div style={{ marginBottom: 20 }}>
-            <textarea
-              value={newNoteContent}
-              onChange={(e) => setNewNoteContent(e.target.value)}
-              placeholder="Add a note or comment..."
-              rows={3}
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <button
-              className="primary"
-              onClick={async () => {
-                if (!newNoteContent.trim()) return
-                try {
-                  await addLeadNote(leadId, newNoteContent)
-                  setNewNoteContent('')
-                  onInfo('Note added')
-                  await refreshNotes()
-                } catch (e) {
-                  onError(e instanceof Error ? e.message : 'Failed to add note')
-                }
-              }}
-              disabled={!newNoteContent.trim()}
-            >
-              Add Note
-            </button>
-          </div>
-
-          {notes.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No notes yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {notes.map((note) => (
-                <div key={note.id} className="sak-card" style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{note.user.displayName}</div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>{new Date(note.createdAt).toLocaleString()}</div>
-                  </div>
-                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{note.content}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : viewMode === 'tasks' ? (
-        <div>
-          <h3 style={{ marginTop: 0 }}>Tasks</h3>
-          
-          {tasks.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No tasks yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {tasks.map((task) => (
-                <div key={task.id} className="sak-card" style={{ padding: 16, opacity: task.status === 'COMPLETED' || task.status === 'CANCELLED' ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Badge
-                        kind={
-                          task.status === 'COMPLETED' ? 'ok' :
-                          task.status === 'IN_PROGRESS' ? 'warn' :
-                          task.status === 'CANCELLED' ? 'muted' :
-                          'danger'
-                        }
-                        text={task.status.replace('_', ' ')}
-                      />
-                      <Badge
-                        kind={
-                          task.priority === 'URGENT' ? 'danger' :
-                          task.priority === 'HIGH' ? 'warn' :
-                          'muted'
-                        }
-                        text={task.priority}
-                      />
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'No due date'}
-                    </div>
-                  </div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{task.title}</div>
-                  {task.description && (
-                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, marginBottom: 8, opacity: 0.9 }}>
-                      {task.description}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    {task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditingTask(task)
-                            setTaskTitle(task.title)
-                            setTaskDescription(task.description || '')
-                            setTaskDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : '')
-                            setTaskPriority(task.priority)
-                            setShowTaskModal(true)
-                          }}
-                          style={{ fontSize: 12 }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await updateTask(task.id, {
-                                status: task.status === 'IN_PROGRESS' ? 'PENDING' : 'IN_PROGRESS'
-                              })
-                              onInfo('Task status updated')
-                              await refreshTasks()
-                            } catch (e) {
-                              onError(e instanceof Error ? e.message : 'Failed to update task')
-                            }
-                          }}
-                          style={{ fontSize: 12 }}
-                        >
-                          {task.status === 'IN_PROGRESS' ? '⏸️ Pause' : '▶️ Start'}
-                        </button>
-                        <button
-                          className="primary"
-                          onClick={async () => {
-                            try {
-                              await updateTask(task.id, { status: 'COMPLETED' })
-                              onInfo('Task completed')
-                              await refreshTasks()
-                            } catch (e) {
-                              onError(e instanceof Error ? e.message : 'Failed to complete task')
-                            }
-                          }}
-                          style={{ fontSize: 12 }}
-                        >
-                          ✓ Complete
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={async () => {
-                        if (confirm('Are you sure you want to delete this task?')) {
-                          try {
-                            await deleteTask(task.id)
-                            onInfo('Task deleted')
-                            await refreshTasks()
-                          } catch (e) {
-                            onError(e instanceof Error ? e.message : 'Failed to delete task')
-                          }
-                        }
-                      }}
-                      style={{ fontSize: 12, marginLeft: 'auto' }}
-                    >
-                      🗑️ Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <div style={{ marginTop: 16 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Messages</h3>
-            {(lead.messages ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No messages yet.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(lead.messages ?? []).map((m: any) => (
-                  <div key={m.id} className="sak-card" style={{ padding: 10 }}>
-                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
-                      <Badge kind={m.direction === 'IN' ? 'warn' : 'ok'} text={m.direction} /> • {m.channel} •{' '}
-                      {new Date(m.createdAt).toLocaleString()}
-                    </div>
-                    <div>{m.body}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Events</h3>
-            {(lead.events ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No events yet.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(lead.events ?? []).map((e: any) => (
-                  <div key={e.id} className="sak-card" style={{ padding: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <Badge kind="muted" text={e.type} />
-                      <span style={{ fontSize: 12, opacity: 0.7 }}>{new Date(e.createdAt).toLocaleString()}</span>
-                    </div>
-                    <details>
-                      <summary style={{ cursor: 'pointer', fontSize: 13, opacity: 0.8 }}>Show details</summary>
-                      <pre style={{ fontSize: 11, marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                        {JSON.stringify(e.payload, null, 2)}
-                      </pre>
-                    </details>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Triage History</h3>
-            {(lead.triageItems ?? []).length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No triage items.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(lead.triageItems ?? []).map((it: any) => (
-                  <div key={it.id} className="sak-card" style={{ padding: 10 }}>
-                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{new Date(it.createdAt).toLocaleString()}</div>
-                    <div>
-                      <Badge kind={it.status === 'OPEN' ? 'warn' : it.status === 'CLOSED' ? 'ok' : 'muted'} text={it.status} />{' '}
-                      • {it.reason}
-                      {it.suggestedSalesmanId ? ` • suggested ${it.suggestedSalesmanId}` : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {canAssign ? (
-            <div style={{ marginTop: 16 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 8 }}>Success</h3>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <select value={selectedSuccessDefId} onChange={(e) => setSelectedSuccessDefId(e.target.value)}>
-                  {successDefs.length === 0 ? <option value="">No success definitions</option> : null}
-                  {successDefs.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} ({d.type}, weight {d.weight})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={successNote}
-                  onChange={(e) => setSuccessNote(e.target.value)}
-                  placeholder="Note (optional)"
-                  style={{ minWidth: 260 }}
-                />
-                <button
-                  disabled={!selectedSuccessDefId}
-                  onClick={async () => {
-                    try {
-                      await recordLeadSuccess(lead.id, { definitionId: selectedSuccessDefId, note: successNote || undefined })
-                      onInfo('Success recorded')
-                      setSuccessNote('')
-                      await refresh()
-                    } catch (err) {
-                      onError(err instanceof Error ? err.message : 'Failed')
-                    }
-                  }}
-                >
-                  Record
-                </button>
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                {(lead.successEvents ?? []).length === 0 ? (
-                  <div style={{ opacity: 0.8 }}>No success events yet.</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {(lead.successEvents ?? []).map((ev: any) => (
-                      <div key={ev.id} className="sak-card" style={{ borderRadius: 12, padding: 10 }}>
-                        <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(ev.createdAt).toLocaleString()}</div>
-                        <div>
-                          {ev.type} • weight {ev.weight}
-                          {ev.salesmanId ? ` • salesman ${ev.salesmanId}` : ''}
-                        </div>
-                        {ev.note ? <div style={{ marginTop: 4, opacity: 0.9 }}>{ev.note}</div> : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </>
-      )}
-    </div>
-    </>
+    <LeadDetail2025
+      lead={lead}
+      onRefresh={refresh}
+      onSendMessage={async (content: string) => {
+        try {
+          await sendLeadMessage(leadId, 'WHATSAPP', content)
+          onInfo('Message sent!')
+          refresh()
+        } catch (e) {
+          onError(e instanceof Error ? e.message : 'Failed to send message')
+        }
+      }}
+      onUpdateStatus={async (status: string) => {
+        try {
+          await updateLeadStatus(leadId, status)
+          onInfo(`Status updated to ${status}`)
+          refresh()
+        } catch (e) {
+          onError(e instanceof Error ? e.message : 'Failed to update status')
+        }
+      }}
+    />
   )
 }
 
@@ -2433,7 +1287,7 @@ function SalesmenPage({ onError, onInfo }: { onError: (m: string) => void; onInf
     refresh()
   }, [])
 
-  const handleUpdate = async (id: string, updates: { displayName: string; isActive: boolean }) => {
+  const handleUpdate = async (id: string, updates: any) => {
     try {
       await updateSalesman(id, updates)
       onInfo('Salesman updated')
@@ -2443,10 +1297,21 @@ function SalesmenPage({ onError, onInfo }: { onError: (m: string) => void; onInf
     }
   }
 
+  const handleCreate = async (salesman: { displayName: string; username: string; password: string; role: string }) => {
+    try {
+      await createSalesman(salesman)
+      onInfo('Salesman created successfully')
+      await refresh()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to create salesman')
+    }
+  }
+
   return (
     <Salesmen2025
       salesmen={salesmen}
       onUpdate={handleUpdate}
+      onCreate={handleCreate}
       onRefresh={refresh}
     />
   )
@@ -2840,7 +1705,7 @@ function App() {
                 {authMode() === 'dev_headers' && <Route path="/dev-setup" element={<DevSetup onError={onError} onInfo={onInfo} />} />}
                 <Route path="/" element={<DashboardPage onError={onError} />} />
                 <Route path="/leads" element={<LeadsPage onError={onError} />} />
-                <Route path="/leads/:id" element={<LeadDetailPage onError={onError} onInfo={onInfo} role={session.user?.role ?? null} />} />
+                <Route path="/leads/:id" element={<LeadDetailPage onError={onError} onInfo={onInfo} />} />
                 <Route path="/triage" element={<TriagePage onError={onError} onInfo={onInfo} />} />
                 <Route path="/salesmen" element={<SalesmenPage onError={onError} onInfo={onInfo} />} />
                 <Route path="/reports" element={<ReportsPage onError={onError} onInfo={onInfo} />} />
