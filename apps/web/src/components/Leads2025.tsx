@@ -63,6 +63,7 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [heatFilter, setHeatFilter] = useState<string>('ALL')
+  const [emailsOnly, setEmailsOnly] = useState(false)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
@@ -90,10 +91,11 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
       
       const matchesStatus = statusFilter === 'ALL' || lead.status === statusFilter
       const matchesHeat = heatFilter === 'ALL' || lead.heat === heatFilter
+      const matchesChannel = !emailsOnly || lead.channel === 'EMAIL'
 
-      return matchesSearch && matchesStatus && matchesHeat
+      return matchesSearch && matchesStatus && matchesHeat && matchesChannel
     })
-  }, [leads, searchTerm, statusFilter, heatFilter])
+  }, [leads, searchTerm, statusFilter, heatFilter, emailsOnly])
 
   const selectedCount = selectedLeadIds.size
   const allFilteredSelected = filteredLeads.length > 0 && selectedLeadIds.size === filteredLeads.length
@@ -190,6 +192,16 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
             <option value="COLD">❄️ Cold</option>
           </select>
 
+          <label className="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2 font-medium text-slate-700 select-none">
+            <input
+              type="checkbox"
+              checked={emailsOnly}
+              onChange={(e) => setEmailsOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-mint-600 focus:ring-mint-500/30"
+            />
+            <span>Emails only</span>
+          </label>
+
           {/* Clear Filters */}
           {(searchTerm || statusFilter !== 'ALL' || heatFilter !== 'ALL') && (
             <button
@@ -197,6 +209,7 @@ export function Leads2025({ leads, onRefresh, onExport, onDelete, onBulkDelete, 
                 setSearchTerm('')
                 setStatusFilter('ALL')
                 setHeatFilter('ALL')
+                setEmailsOnly(false)
               }}
               className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 transition-all font-medium text-slate-700"
             >
