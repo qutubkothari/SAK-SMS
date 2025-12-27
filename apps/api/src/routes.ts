@@ -33,6 +33,27 @@ function normalizeForKeywordMatch(input: string): string {
     .trim();
 }
 
+function buildEmailCustomerMessage(email: {
+  from?: string | null;
+  fromName?: string | null;
+  subject?: string | null;
+  text?: string | null;
+}): string {
+  const from = (email.from ?? '').trim();
+  const fromName = (email.fromName ?? '').trim();
+  const subject = (email.subject ?? '').trim();
+  const text = (email.text ?? '').trim();
+
+  const headerFrom = fromName ? `${fromName} <${from || 'unknown'}>` : (from || 'unknown');
+  const headerSubject = subject || '(no subject)';
+
+  // Keep payload bounded to avoid huge token usage from long email threads.
+  const MAX_BODY_CHARS = 4000;
+  const clippedBody = text.length > MAX_BODY_CHARS ? `${text.slice(0, MAX_BODY_CHARS)}\n\n[trimmed]` : text;
+
+  return `Email enquiry\nFrom: ${headerFrom}\nSubject: ${headerSubject}\n\nMessage:\n${clippedBody}`;
+}
+
 function anyKeywordMatches(subject: string, body: string, keywords: string[]): boolean {
   if (!keywords || keywords.length === 0) return false;
   const hay = normalizeForKeywordMatch(`${subject}\n${body}`);
@@ -3764,7 +3785,7 @@ routes.post(
             channel: 'EMAIL',
             fullName: email.fromName,
             email: email.from,
-            customerMessage: email.text,
+            customerMessage: buildEmailCustomerMessage(email),
             externalId: email.messageId,
           },
         });
@@ -3872,7 +3893,7 @@ routes.post(
               channel: 'EMAIL',
               fullName: email.fromName,
               email: email.from,
-              customerMessage: email.text,
+              customerMessage: buildEmailCustomerMessage(email),
               externalId: email.messageId,
             },
           });
@@ -3965,7 +3986,7 @@ routes.get(
                 channel: 'EMAIL',
                 fullName: email.fromName,
                 email: email.from,
-                customerMessage: email.text,
+                customerMessage: buildEmailCustomerMessage(email),
                 externalId: email.messageId,
               },
             });
