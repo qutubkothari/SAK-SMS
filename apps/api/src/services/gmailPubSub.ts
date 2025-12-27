@@ -13,6 +13,36 @@ let gmailClient: any = null;
 let oauth2Client: OAuth2Client | null = null;
 let gmailConfig: GmailConfig | null = null;
 
+let gmailListBlockedUntilMs = 0;
+
+function parseRetryAfterMs(error: any): number | undefined {
+  const now = Date.now();
+
+  const retryAfterHeader = error?.response?.headers?.['retry-after'] ?? error?.response?.headers?.['Retry-After'];
+  if (retryAfterHeader) {
+    const asNumber = Number(retryAfterHeader);
+    if (Number.isFinite(asNumber) && asNumber > 0) {
+      return now + Math.floor(asNumber * 1000);
+    }
+    const asDate = Date.parse(String(retryAfterHeader));
+    if (Number.isFinite(asDate)) {
+      return asDate;
+    }
+  }
+
+  const causeMessage = error?.cause?.message || error?.[Symbol.for('cause')]?.message;
+  const message = String(causeMessage || error?.message || '');
+  const match = message.match(/Retry after\s+([0-9]{4}-[0-9]{2}-[0-9]{2}T[^\s]+)/i);
+  if (match?.[1]) {
+    const parsed = Date.parse(match[1]);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
 export function configureGmail(config: GmailConfig) {
   gmailConfig = config;
 
@@ -93,6 +123,16 @@ export async function listUnreadGmailMessages(maxResults: number = 10): Promise<
   }
 
   try {
+    const now = Date.now();
+    if (now < gmailListBlockedUntilMs) {
+      const err: any = new Error(
+        `[Gmail] Rate limited; retry after ${new Date(gmailListBlockedUntilMs).toISOString()}`
+      );
+      err.code = 429;
+      err.retryAfterMs = gmailListBlockedUntilMs;
+      throw err;
+    }
+
     const response = await gmailClient.users.messages.list({
       userId: 'me',
       q: 'is:unread in:inbox',
@@ -101,6 +141,18 @@ export async function listUnreadGmailMessages(maxResults: number = 10): Promise<
 
     return response.data.messages || [];
   } catch (error: any) {
+    const status = error?.code ?? error?.response?.status;
+    if (status === 429) {
+      const retryAfterMs = parseRetryAfterMs(error);
+      if (retryAfterMs) {
+        gmailListBlockedUntilMs = Math.max(gmailListBlockedUntilMs, retryAfterMs);
+        (error as any).retryAfterMs = gmailListBlockedUntilMs;
+      } else {
+        // Conservative default backoff when Gmail doesn't give a usable retry time.
+        gmailListBlockedUntilMs = Math.max(gmailListBlockedUntilMs, Date.now() + 10 * 60 * 1000);
+        (error as any).retryAfterMs = gmailListBlockedUntilMs;
+      }
+    }
     console.error('[Gmail] Failed to list messages:', error.message);
     throw error;
   }

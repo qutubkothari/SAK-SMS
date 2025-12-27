@@ -3802,9 +3802,36 @@ routes.post(
 );
 
 // Gmail Pub/Sub webhook - receives push notifications when new emails arrive
+let gmailWebhookInFlight = false;
+let gmailWebhookBackoffUntilMs = 0;
+
+function getRetryAfterMsFromError(error: any): number | undefined {
+  const candidate = error?.retryAfterMs;
+  if (Number.isFinite(candidate)) return candidate;
+  return undefined;
+}
+
 routes.post(
   '/webhooks/gmail',
   asyncHandler(async (req, res) => {
+    const now = Date.now();
+    if (now < gmailWebhookBackoffUntilMs) {
+      res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: 'rate_limited',
+        retryAfter: new Date(gmailWebhookBackoffUntilMs).toISOString(),
+      });
+      return;
+    }
+
+    if (gmailWebhookInFlight) {
+      res.status(200).json({ success: true, skipped: true, reason: 'in_flight' });
+      return;
+    }
+
+    gmailWebhookInFlight = true;
+
     try {
       // Pub/Sub sends data in this format
       const pubsubMessage = req.body.message;
@@ -3927,8 +3954,33 @@ routes.post(
       console.log(`[Gmail Webhook] Summary: ${processed} processed, ${skipped} skipped`);
       res.status(200).json({ success: true, processed, skipped });
     } catch (error: any) {
+      const status = error?.code ?? error?.response?.status;
+      if (status === 429) {
+        const retryAfterMs = getRetryAfterMsFromError(error);
+        if (retryAfterMs) {
+          gmailWebhookBackoffUntilMs = Math.max(gmailWebhookBackoffUntilMs, retryAfterMs);
+        } else {
+          gmailWebhookBackoffUntilMs = Math.max(gmailWebhookBackoffUntilMs, Date.now() + 10 * 60 * 1000);
+        }
+
+        console.warn(
+          `[Gmail Webhook] Gmail rate-limited; backing off until ${new Date(gmailWebhookBackoffUntilMs).toISOString()}`
+        );
+
+        // IMPORTANT: acknowledge Pub/Sub so it doesn't retry and amplify the rate limit.
+        res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: 'rate_limited',
+          retryAfter: new Date(gmailWebhookBackoffUntilMs).toISOString(),
+        });
+        return;
+      }
+
       console.error('[Gmail Webhook] Error:', error);
       res.status(500).json({ error: error.message });
+    } finally {
+      gmailWebhookInFlight = false;
     }
   })
 );
