@@ -37,10 +37,12 @@ $target = "$User@$Server"
 
 Write-Host "==> Ensuring remote deploy dir: $AppDir/deploy/ec2"
 & ssh @sshArgs $target "mkdir -p $AppDir/deploy/ec2" | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "ssh failed (mkdir). Exit code: $LASTEXITCODE" }
 
 Write-Host "==> Uploading deploy scripts"
 # Always upload the latest deploy helpers (even if repo checkout is older).
 & scp @sshArgs "deploy/ec2/remote-deploy.sh" "deploy/ec2/pm2.config.cjs" "deploy/ec2/nginx-site.conf" "deploy/ec2/bootstrap.sh" "${target}:$AppDir/deploy/ec2/" | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "scp failed (upload deploy scripts). Exit code: $LASTEXITCODE" }
 
 Write-Host "==> Running remote deploy (pulls from GitHub and restarts services)"
 $remoteCmd = @(
@@ -49,6 +51,7 @@ $remoteCmd = @(
 ) -join ' && '
 
 & ssh @sshArgs $target $remoteCmd | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "ssh failed (remote deploy). Exit code: $LASTEXITCODE" }
 
 Write-Host "==> Done"
 Write-Host "Web:  http://$Server/"

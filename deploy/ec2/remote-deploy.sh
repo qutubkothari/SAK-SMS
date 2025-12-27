@@ -56,6 +56,14 @@ echo "==> Prisma generate + migrate deploy"
 ( cd apps/api && npm run prisma:deploy )
 
 echo "==> Building"
+# tsc/vite builds can OOM on small instances; set a bigger Node heap just for build.
+BUILD_HEAP_MB=${NODE_BUILD_HEAP_MB:-3072}
+if [ -n "${NODE_OPTIONS:-}" ]; then
+  export NODE_OPTIONS="$NODE_OPTIONS --max-old-space-size=$BUILD_HEAP_MB"
+else
+  export NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP_MB"
+fi
+
 npm run -ws build
 
 echo "==> Publish web to Nginx"
