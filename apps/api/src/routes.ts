@@ -3,7 +3,16 @@ import { z } from 'zod';
 import { prisma } from './db.js';
 import { asyncHandler } from './http.js';
 import { HttpError } from './http.js';
-import { clearAuthCookie, getAuthContext, getTenantId, hashPassword, setAuthCookie, signAuthToken, verifyPassword } from './auth.js';
+import {
+  clearAuthCookie,
+  getAuthContext,
+  getTenantId,
+  getTenantIdOptional,
+  hashPassword,
+  setAuthCookie,
+  signAuthToken,
+  verifyPassword
+} from './auth.js';
 import { createAiGatewayForTenant } from './ai/tenantAi.js';
 import { pickSalesmanRoundRobin } from './services/routing.js';
 import { recomputeSalesmanScores } from './services/scoring.js';
@@ -438,39 +447,21 @@ routes.post(
 );
 
 routes.post(
-  '/notifications/read-all',
-  asyncHandler(async (req, res) => {
-    const { tenantId, userId } = getAuthContext(req);
-    try {
-      await prisma.notification.updateMany({
-        where: { tenantId, userId, readAt: null },
-        data: { readAt: new Date() }
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        'POST /notifications/read-all failed (missing migration?):',
-        err instanceof Error ? err.message : err
-      );
-    }
-    res.json({ ok: true });
-  })
-);
-
-// Auth
-routes.post(
   '/auth/login',
   asyncHandler(async (req, res) => {
+    const headerTenantId = getTenantIdOptional(req) ?? process.env.DEFAULT_TENANT_ID ?? null;
+
     const body = z
       .object({
-        phone: z.string().min(1),
+        email: z.string().email(),
         password: z.string().min(1)
       })
       .parse(req.body);
 
     const user = await prisma.user.findFirst({
       where: {
-        phone: body.phone,
+        ...(headerTenantId ? { tenantId: headerTenantId } : {}),
+        email: body.email,
         active: true
       }
     });
@@ -4078,9 +4069,11 @@ routes.get(
   '/admin/gmail-debug',
   asyncHandler(async (req, res) => {
     const tenantId = (req.query.tenantId as string) || process.env.DEFAULT_TENANT_ID || 'tenant_default';
+    const force = String(req.query.force ?? '0') === '1';
     const results: any = {
       timestamp: new Date().toISOString(),
       tenantId,
+      force,
       steps: [],
     };
 
@@ -4094,16 +4087,38 @@ routes.get(
         GMAIL_PUBSUB_TOPIC: process.env.GMAIL_PUBSUB_TOPIC || 'MISSING',
       });
 
-      // Step 2: Import and check Gmail service
+      // Step 2: Show DB cursor and local backoff timers (safe: no Gmail API calls)
+      const syncState = await prisma.gmailSyncState.findUnique({ where: { tenantId } });
+      results.steps.push({
+        step: 'db_sync_state',
+        exists: Boolean(syncState),
+        emailAddress: syncState?.emailAddress ?? null,
+        lastHistoryId: syncState?.lastHistoryId ?? null,
+        updatedAt: syncState?.updatedAt?.toISOString?.() ?? null,
+      });
+
+      const { getGmailRateLimitStatus } = await import('./services/gmailPubSub.js');
+      const rateLimit = getGmailRateLimitStatus();
+      results.steps.push({ step: 'rate_limit_status', ...rateLimit });
+
+      if (!force) {
+        results.steps.push({
+          step: 'note',
+          message: 'Safe mode: no Gmail API calls. Add ?force=1 to perform a live Gmail fetch.',
+        });
+        results.success = true;
+        res.json(results);
+        return;
+      }
+
+      // Step 3+: Live Gmail calls (ONLY when force=1)
       const { listUnreadGmailMessages, fetchGmailMessage, markGmailMessageAsRead } = await import('./services/gmailPubSub.js');
       results.steps.push({ step: 'import_service', status: 'OK' });
 
-      // Step 3: List unread messages
       const messages = await listUnreadGmailMessages(5);
-      results.steps.push({ step: 'list_messages', count: messages.length, messages: messages.map(m => m.id) });
+      results.steps.push({ step: 'list_messages', count: messages.length, messages: messages.map((m: any) => m.id) });
 
       if (messages.length > 0) {
-        // Step 4: Fetch first message details
         const email = await fetchGmailMessage(messages[0].id!);
         results.steps.push({
           step: 'fetch_message',
@@ -4113,11 +4128,12 @@ routes.get(
           textLength: email.text?.length || 0,
         });
 
-        // Step 5: Check if it's an enquiry
-        const isEnquiry = isLikelyEnquiry(email);
+        const keywords = getEmailEnquiryKeywords();
+        const requireKeywordMatch =
+          keywords.length > 0 && String(process.env.EMAIL_ENQUIRY_REQUIRE_KEYWORDS ?? '1').toLowerCase() !== '0';
+        const isEnquiry = isLikelyEnquiry(email, { keywords, requireKeywordMatch });
         results.steps.push({ step: 'enquiry_check', isEnquiry, from: email.from, subject: email.subject });
 
-        // Step 6: Try to create a lead (if enquiry)
         if (isEnquiry) {
           try {
             const ingestResult = await handleIngestMessage({
@@ -4135,7 +4151,6 @@ routes.get(
             results.steps.push({ step: 'ingest_message', status: 'ERROR', error: ingestError.message });
           }
 
-          // Step 7: Try to mark as read
           try {
             await markGmailMessageAsRead(messages[0].id!);
             results.steps.push({ step: 'mark_as_read', status: 'OK', messageId: messages[0].id });

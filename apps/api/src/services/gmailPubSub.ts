@@ -16,6 +16,16 @@ let gmailConfig: GmailConfig | null = null;
 let gmailListBlockedUntilMs = 0;
 let gmailHistoryBlockedUntilMs = 0;
 
+export function getGmailRateLimitStatus(): {
+  listUnreadBlockedUntilMs: number;
+  historyBlockedUntilMs: number;
+} {
+  return {
+    listUnreadBlockedUntilMs: gmailListBlockedUntilMs,
+    historyBlockedUntilMs: gmailHistoryBlockedUntilMs,
+  };
+}
+
 function parseRetryAfterMs(error: any): number | undefined {
   const now = Date.now();
 
