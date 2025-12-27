@@ -17,7 +17,48 @@ export const routes = Router();
 /**
  * Smart enquiry detection - filters out promotional/automated emails
  */
-function isLikelyEnquiry(email: { from: string; subject: string; text: string; fromName: string }): boolean {
+function parseKeywordList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,\n]/g)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length >= 2);
+}
+
+function normalizeForKeywordMatch(input: string): string {
+  return (input || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function anyKeywordMatches(subject: string, body: string, keywords: string[]): boolean {
+  if (!keywords || keywords.length === 0) return false;
+  const hay = normalizeForKeywordMatch(`${subject}\n${body}`);
+  for (const kw of keywords) {
+    const needle = normalizeForKeywordMatch(kw);
+    if (!needle) continue;
+    if (hay.includes(needle)) return true;
+  }
+  return false;
+}
+
+function getEmailEnquiryKeywords(): string[] {
+  // If you set EMAIL_ENQUIRY_KEYWORDS, it will be used as a strict allowlist.
+  // Example:
+  // EMAIL_ENQUIRY_KEYWORDS="air circulator,man cooler,heavy duty exhaust,tube axial,centrifugal blower,axial flow,pedestal fan,wall mount fan,tubular fan,hvls"
+  const configured = parseKeywordList(process.env.EMAIL_ENQUIRY_KEYWORDS);
+  if (configured.length > 0) return configured;
+
+  // No keywords configured => return empty list so behaviour stays backward-compatible.
+  return [];
+}
+
+function isLikelyEnquiry(
+  email: { from: string; subject: string; text: string; fromName?: string },
+  opts?: { requireKeywordMatch?: boolean; keywords?: string[] }
+): boolean {
   const subject = email.subject?.toLowerCase() || '';
   const body = email.text?.toLowerCase() || '';
   const from = email.from?.toLowerCase() || '';
@@ -129,6 +170,14 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
     'congratulations',
     'beehiiv',
     'substack',
+    // Not sales enquiries
+    'job application',
+    'apply for',
+    'career',
+    'resume',
+    'cv',
+    'vacancy',
+    'hiring',
   ];
   
   for (const pattern of spamPatterns) {
@@ -212,9 +261,17 @@ function isLikelyEnquiry(email: { from: string; subject: string; text: string; f
       enquiryScore++;
     }
   }
-  
-  // Must have at least one enquiry pattern to be considered a genuine enquiry
-  // This prevents random personal emails from being processed
+
+  // Optional: strict product keyword allowlist.
+  const keywords = opts?.keywords ?? [];
+  const requireKeywordMatch = opts?.requireKeywordMatch ?? false;
+  if (requireKeywordMatch && keywords.length > 0) {
+    const hasKeyword = anyKeywordMatches(subject, body, keywords);
+    if (!hasKeyword) return false;
+  }
+
+  // Must have at least one enquiry pattern to be considered a genuine enquiry.
+  // This prevents random personal emails from being processed.
   return enquiryScore > 0;
 }
 
@@ -3684,12 +3741,22 @@ routes.post(
   asyncHandler(async (req, res) => {
     const tenantId = getTenantId(req);
     const { pollEmails } = await import('./services/email.js');
+
+    const keywords = getEmailEnquiryKeywords();
+    const requireKeywordMatch = keywords.length > 0;
     
     const emails: any[] = [];
     try {
       await pollEmails(async (email) => {
         console.log(`[Manual Poll] Received: ${email.from} - ${email.subject}`);
         emails.push({ from: email.from, subject: email.subject });
+
+        const isEnquiry = isLikelyEnquiry(email, { keywords, requireKeywordMatch });
+        if (!isEnquiry) {
+          console.log(`[Manual Poll] Skipping non-enquiry email: ${email.subject}`);
+          return;
+        }
+
         await handleIngestMessage({
           tenantId,
           body: {
@@ -3759,6 +3826,9 @@ routes.post(
       let processed = 0;
       let skipped = 0;
 
+      const keywords = getEmailEnquiryKeywords();
+      const requireKeywordMatch = keywords.length > 0;
+
       for (const msg of messages) {
         try {
           const email = await fetchGmailMessage(msg.id!);
@@ -3766,7 +3836,7 @@ routes.post(
           console.log(`[Gmail Webhook] Fetched email from: ${email.from} - Subject: ${email.subject}`);
 
           // Smart enquiry detection - skip promotional/automated emails
-          const isEnquiry = isLikelyEnquiry(email);
+          const isEnquiry = isLikelyEnquiry(email, { keywords, requireKeywordMatch });
           
           if (!isEnquiry) {
             console.log(`[Gmail Webhook] Skipping non-enquiry email: ${email.subject}`);
