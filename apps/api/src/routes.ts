@@ -3866,23 +3866,29 @@ routes.post(
 
       console.log('[Gmail Webhook] Importing Gmail service...');
       // Import Gmail service
-      const { fetchGmailMessage, markGmailMessageAsRead, listGmailHistoryMessageIds } = await import('./services/gmailPubSub.js');
+      const {
+        fetchGmailMessage,
+        markGmailMessageAsRead,
+        listGmailHistoryMessageIds,
+        listUnreadGmailMessages,
+      } = await import('./services/gmailPubSub.js');
 
       // Load last processed historyId for this tenant.
-      const syncState = await prisma.gmailSyncState.findUnique({ where: { tenantId } });
+      let seeded = false;
+      let syncState = await prisma.gmailSyncState.findUnique({ where: { tenantId } });
       if (!syncState) {
-        await prisma.gmailSyncState.create({
+        syncState = await prisma.gmailSyncState.create({
           data: {
             tenantId,
             emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : null,
+            // Seed cursor to current notification historyId.
+            // We'll still do a best-effort one-time unread scan below to avoid missing the first batch.
             lastHistoryId: historyId,
             updatedAt: new Date(),
           },
         });
-
+        seeded = true;
         console.log(`[Gmail Webhook] Seeded historyId for tenant ${tenantId}: ${historyId}`);
-        res.status(200).json({ success: true, seeded: true });
-        return;
       }
 
       let startHistoryId = syncState.lastHistoryId;
@@ -3897,35 +3903,44 @@ routes.post(
         // If parsing fails, just continue.
       }
 
-      console.log(`[Gmail Webhook] Fetching history since ${startHistoryId} -> ${historyId}`);
-
       let messageIds: string[] = [];
-      try {
-        const historyResult = await listGmailHistoryMessageIds({
-          startHistoryId,
-          labelId: 'INBOX',
-          maxPages: 10,
-        });
-        messageIds = historyResult.messageIds;
-      } catch (e: any) {
-        // Gmail returns 404 when the startHistoryId is too old/invalid; reset to current.
-        const status = e?.code ?? e?.response?.status;
-        if (status === 404 || String(e?.message || '').toLowerCase().includes('history')) {
-          console.warn(`[Gmail Webhook] Invalid/expired historyId (${startHistoryId}); resetting to ${historyId}`);
-          await prisma.gmailSyncState.update({
-            where: { tenantId },
-            data: {
-              lastHistoryId: historyId,
-              emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : syncState.emailAddress,
-              updatedAt: new Date(),
-            },
+      if (seeded) {
+        // Best-effort: one-time unread scan so we don't miss the first notification batch.
+        console.log('[Gmail Webhook] No prior history cursor; doing one-time unread scan');
+        const messages = await listUnreadGmailMessages(10);
+        messageIds = (messages || []).map((m: any) => String(m?.id || '')).filter(Boolean);
+      } else {
+        console.log(`[Gmail Webhook] Fetching history since ${startHistoryId} -> ${historyId}`);
+        try {
+          const historyResult = await listGmailHistoryMessageIds({
+            startHistoryId,
+            labelId: 'INBOX',
+            maxPages: 10,
           });
-          res.status(200).json({ success: true, reset: true });
-          return;
-        }
+          messageIds = historyResult.messageIds;
+        } catch (e: any) {
+          // Gmail returns 404 when the startHistoryId is too old/invalid; reset to current.
+          const status = e?.code ?? e?.response?.status;
+          if (status === 404 || String(e?.message || '').toLowerCase().includes('history')) {
+            console.warn(`[Gmail Webhook] Invalid/expired historyId (${startHistoryId}); resetting to ${historyId}`);
+            await prisma.gmailSyncState.update({
+              where: { tenantId },
+              data: {
+                lastHistoryId: historyId,
+                emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : syncState.emailAddress,
+                updatedAt: new Date(),
+              },
+            });
+            res.status(200).json({ success: true, reset: true });
+            return;
+          }
 
-        throw e;
+          throw e;
+        }
       }
+
+      // De-dup
+      messageIds = Array.from(new Set(messageIds));
 
       console.log(`[Gmail Webhook] Found ${messageIds.length} changed message(s) from history`);
 

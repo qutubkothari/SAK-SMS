@@ -109,36 +109,63 @@ if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN) {
     pubSubTopic: process.env.GMAIL_PUBSUB_TOPIC || '',
   });
 
-  // Start watching Gmail inbox for push notifications
-  try {
-    const watch = await startGmailWatch();
-    if (watch?.historyId) {
-      // Seed per-tenant history cursor so the first Pub/Sub notifications can be consumed via history.list.
-      let defaultTenantId = process.env.DEFAULT_TENANT_ID;
-      if (!defaultTenantId) {
-        const firstTenant = await prisma.tenant.findFirst({ select: { id: true } });
-        defaultTenantId = firstTenant?.id;
-      }
-
-      if (defaultTenantId) {
-        const existing = await prisma.gmailSyncState.findUnique({ where: { tenantId: defaultTenantId } });
-        if (!existing) {
-          await prisma.gmailSyncState.create({
-            data: {
-              tenantId: defaultTenantId,
-              lastHistoryId: String(watch.historyId),
-              updatedAt: new Date(),
-            },
-          });
-          console.log(`[Gmail] Seeded GmailSyncState for tenant ${defaultTenantId} at historyId ${watch.historyId}`);
-        }
+  function parseRetryAfterMsFromMessage(message: string): number | undefined {
+    const match = String(message || '').match(/Retry after\s+([0-9]{4}-[0-9]{2}-[0-9]{2}T[^\s]+)/i);
+    if (match?.[1]) {
+      const parsed = Date.parse(match[1]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
       }
     }
-    console.log('[Gmail] Pub/Sub watch started - will receive real-time notifications');
-  } catch (error: any) {
-    console.error('[Gmail] Failed to start watch:', error.message);
-    console.error('[Gmail] Make sure Pub/Sub topic is configured and permissions are granted');
+    return undefined;
   }
+
+  const startWatchWithRetry = async (attempt: number = 1) => {
+    try {
+      const watch = await startGmailWatch();
+      if (watch?.historyId) {
+        // Seed per-tenant history cursor so the first Pub/Sub notifications can be consumed via history.list.
+        let defaultTenantId = process.env.DEFAULT_TENANT_ID;
+        if (!defaultTenantId) {
+          const firstTenant = await prisma.tenant.findFirst({ select: { id: true } });
+          defaultTenantId = firstTenant?.id;
+        }
+
+        if (defaultTenantId) {
+          const existing = await prisma.gmailSyncState.findUnique({ where: { tenantId: defaultTenantId } });
+          if (!existing) {
+            await prisma.gmailSyncState.create({
+              data: {
+                tenantId: defaultTenantId,
+                lastHistoryId: String(watch.historyId),
+                updatedAt: new Date(),
+              },
+            });
+            console.log(`[Gmail] Seeded GmailSyncState for tenant ${defaultTenantId} at historyId ${watch.historyId}`);
+          }
+        }
+      }
+      console.log('[Gmail] Pub/Sub watch started - will receive real-time notifications');
+    } catch (error: any) {
+      const status = error?.code ?? error?.response?.status;
+      const retryAtMs = parseRetryAfterMsFromMessage(error?.message || '') ?? parseRetryAfterMsFromMessage(error?.cause?.message || '');
+
+      if (status === 429 && retryAtMs && attempt <= 5) {
+        const delayMs = Math.max(5_000, retryAtMs - Date.now());
+        console.warn(`[Gmail] Watch start rate-limited; retrying in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt})`);
+        setTimeout(() => {
+          startWatchWithRetry(attempt + 1).catch((e) => console.error('[Gmail] Watch retry failed:', e?.message || e));
+        }, delayMs);
+        return;
+      }
+
+      console.error('[Gmail] Failed to start watch:', error.message);
+      console.error('[Gmail] Make sure Pub/Sub topic is configured and permissions are granted');
+    }
+  };
+
+  // Start watching Gmail inbox for push notifications
+  startWatchWithRetry().catch((e) => console.error('[Gmail] Watch start failed:', e?.message || e));
 }
 
 const port = Number(process.env.PORT ?? 4000);
