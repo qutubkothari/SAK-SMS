@@ -111,7 +111,29 @@ if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN) {
 
   // Start watching Gmail inbox for push notifications
   try {
-    await startGmailWatch();
+    const watch = await startGmailWatch();
+    if (watch?.historyId) {
+      // Seed per-tenant history cursor so the first Pub/Sub notifications can be consumed via history.list.
+      let defaultTenantId = process.env.DEFAULT_TENANT_ID;
+      if (!defaultTenantId) {
+        const firstTenant = await prisma.tenant.findFirst({ select: { id: true } });
+        defaultTenantId = firstTenant?.id;
+      }
+
+      if (defaultTenantId) {
+        const existing = await prisma.gmailSyncState.findUnique({ where: { tenantId: defaultTenantId } });
+        if (!existing) {
+          await prisma.gmailSyncState.create({
+            data: {
+              tenantId: defaultTenantId,
+              lastHistoryId: String(watch.historyId),
+              updatedAt: new Date(),
+            },
+          });
+          console.log(`[Gmail] Seeded GmailSyncState for tenant ${defaultTenantId} at historyId ${watch.historyId}`);
+        }
+      }
+    }
     console.log('[Gmail] Pub/Sub watch started - will receive real-time notifications');
   } catch (error: any) {
     console.error('[Gmail] Failed to start watch:', error.message);

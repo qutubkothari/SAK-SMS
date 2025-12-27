@@ -117,6 +117,21 @@ model Tenant {
 
   aiConfig  TenantAiConfig?
   assignmentConfig AssignmentConfig?
+
+  gmailSyncState GmailSyncState?
+}
+
+model GmailSyncState {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  emailAddress  String?
+  lastHistoryId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model Client {

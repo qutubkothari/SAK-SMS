@@ -3857,20 +3857,77 @@ routes.post(
         return;
       }
 
+      const historyId = String((data as any)?.historyId || '').trim();
+      if (!historyId) {
+        console.warn('[Gmail Webhook] Missing historyId in notification');
+        res.status(200).json({ success: true, skipped: true, reason: 'missing_history_id' });
+        return;
+      }
+
       console.log('[Gmail Webhook] Importing Gmail service...');
       // Import Gmail service
-      const { fetchGmailMessage, markGmailMessageAsRead, listUnreadGmailMessages } = await import('./services/gmailPubSub.js');
+      const { fetchGmailMessage, markGmailMessageAsRead, listGmailHistoryMessageIds } = await import('./services/gmailPubSub.js');
 
-      console.log('[Gmail Webhook] Fetching unread messages...');
-      // Fetch the actual email content
-      // Note: Gmail Pub/Sub notification doesn't include full message, just historyId
-      // We need to fetch new messages using the Gmail API
-      
-      // For simplicity, we'll check for new UNREAD messages
-      // In production, you'd use the historyId to fetch only new messages
-      const messages = await listUnreadGmailMessages(10);
+      // Load last processed historyId for this tenant.
+      const syncState = await prisma.gmailSyncState.findUnique({ where: { tenantId } });
+      if (!syncState) {
+        await prisma.gmailSyncState.create({
+          data: {
+            tenantId,
+            emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : null,
+            lastHistoryId: historyId,
+            updatedAt: new Date(),
+          },
+        });
 
-      console.log(`[Gmail Webhook] Found ${messages.length} unread message(s)`);
+        console.log(`[Gmail Webhook] Seeded historyId for tenant ${tenantId}: ${historyId}`);
+        res.status(200).json({ success: true, seeded: true });
+        return;
+      }
+
+      let startHistoryId = syncState.lastHistoryId;
+      try {
+        const current = BigInt(historyId);
+        const last = BigInt(startHistoryId);
+        if (current <= last) {
+          res.status(200).json({ success: true, skipped: true, reason: 'no_new_history' });
+          return;
+        }
+      } catch {
+        // If parsing fails, just continue.
+      }
+
+      console.log(`[Gmail Webhook] Fetching history since ${startHistoryId} -> ${historyId}`);
+
+      let messageIds: string[] = [];
+      try {
+        const historyResult = await listGmailHistoryMessageIds({
+          startHistoryId,
+          labelId: 'INBOX',
+          maxPages: 10,
+        });
+        messageIds = historyResult.messageIds;
+      } catch (e: any) {
+        // Gmail returns 404 when the startHistoryId is too old/invalid; reset to current.
+        const status = e?.code ?? e?.response?.status;
+        if (status === 404 || String(e?.message || '').toLowerCase().includes('history')) {
+          console.warn(`[Gmail Webhook] Invalid/expired historyId (${startHistoryId}); resetting to ${historyId}`);
+          await prisma.gmailSyncState.update({
+            where: { tenantId },
+            data: {
+              lastHistoryId: historyId,
+              emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : syncState.emailAddress,
+              updatedAt: new Date(),
+            },
+          });
+          res.status(200).json({ success: true, reset: true });
+          return;
+        }
+
+        throw e;
+      }
+
+      console.log(`[Gmail Webhook] Found ${messageIds.length} changed message(s) from history`);
 
       let processed = 0;
       let skipped = 0;
@@ -3879,18 +3936,24 @@ routes.post(
       const requireKeywordMatch =
         keywords.length > 0 && String(process.env.EMAIL_ENQUIRY_REQUIRE_KEYWORDS ?? '1').toLowerCase() !== '0';
 
-      for (const msg of messages) {
+      for (const messageId of messageIds) {
         try {
-          const email = await fetchGmailMessage(msg.id!);
+          const email = await fetchGmailMessage(messageId);
           
           console.log(`[Gmail Webhook] Fetched email from: ${email.from} - Subject: ${email.subject}`);
+
+          // Only process unread messages (watch is configured on UNREAD, but history can include other changes).
+          if (!Array.isArray(email.labels) || !email.labels.includes('UNREAD')) {
+            skipped++;
+            continue;
+          }
 
           // Smart enquiry detection - skip promotional/automated emails
           const isEnquiry = isLikelyEnquiry(email, { keywords, requireKeywordMatch });
           
           if (!isEnquiry) {
             console.log(`[Gmail Webhook] Skipping non-enquiry email: ${email.subject}`);
-            await markGmailMessageAsRead(msg.id!);
+            await markGmailMessageAsRead(messageId);
             skipped++;
             continue;
           }
@@ -3906,7 +3969,7 @@ routes.post(
 
           if (existingLead) {
             console.log(`[Gmail Webhook] Skipping duplicate email (already processed): ${email.messageId}`);
-            await markGmailMessageAsRead(msg.id!);
+            await markGmailMessageAsRead(messageId);
             skipped++;
             continue;
           }
@@ -3943,13 +4006,23 @@ routes.post(
           }
 
           // Mark as read
-          await markGmailMessageAsRead(msg.id!);
+          await markGmailMessageAsRead(messageId);
           processed++;
-          console.log(`[Gmail Webhook] Successfully processed message ${msg.id}`);
+          console.log(`[Gmail Webhook] Successfully processed message ${messageId}`);
         } catch (error: any) {
-          console.error(`[Gmail Webhook] Failed to process message ${msg.id}:`, error.message, error.stack);
+          console.error(`[Gmail Webhook] Failed to process message ${messageId}:`, error.message, error.stack);
         }
       }
+
+      // Persist that we've consumed up to this historyId.
+      await prisma.gmailSyncState.update({
+        where: { tenantId },
+        data: {
+          lastHistoryId: historyId,
+          emailAddress: (data as any)?.emailAddress ? String((data as any).emailAddress) : syncState.emailAddress,
+          updatedAt: new Date(),
+        },
+      });
 
       console.log(`[Gmail Webhook] Summary: ${processed} processed, ${skipped} skipped`);
       res.status(200).json({ success: true, processed, skipped });

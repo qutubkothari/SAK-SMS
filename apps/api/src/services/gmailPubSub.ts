@@ -14,6 +14,7 @@ let oauth2Client: OAuth2Client | null = null;
 let gmailConfig: GmailConfig | null = null;
 
 let gmailListBlockedUntilMs = 0;
+let gmailHistoryBlockedUntilMs = 0;
 
 function parseRetryAfterMs(error: any): number | undefined {
   const now = Date.now();
@@ -68,7 +69,7 @@ export function configureGmail(config: GmailConfig) {
  * Start watching Gmail inbox for new messages
  * Sets up push notifications to Pub/Sub topic
  */
-export async function startGmailWatch(): Promise<void> {
+export async function startGmailWatch(): Promise<{ historyId?: string; expiration?: string }> {
   if (!gmailClient || !gmailConfig) {
     throw new Error('Gmail service not configured');
   }
@@ -88,7 +89,10 @@ export async function startGmailWatch(): Promise<void> {
     console.log('[Gmail] Expiration:', new Date(parseInt(response.data.expiration)));
     console.log('[Gmail] History ID:', response.data.historyId);
 
-    return response.data;
+    return {
+      historyId: response.data.historyId ? String(response.data.historyId) : undefined,
+      expiration: response.data.expiration ? String(response.data.expiration) : undefined,
+    };
   } catch (error: any) {
     console.error('[Gmail] Failed to start watch:', error.message);
     throw error;
@@ -154,6 +158,95 @@ export async function listUnreadGmailMessages(maxResults: number = 10): Promise<
       }
     }
     console.error('[Gmail] Failed to list messages:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * List message IDs changed since a given Gmail history ID.
+ * This is the recommended way to consume Pub/Sub notifications without polling.
+ */
+export async function listGmailHistoryMessageIds(params: {
+  startHistoryId: string;
+  labelId?: string;
+  maxPages?: number;
+}): Promise<{ messageIds: string[] }> {
+  if (!gmailClient) {
+    throw new Error('Gmail service not configured');
+  }
+
+  const startHistoryId = String(params.startHistoryId || '').trim();
+  if (!startHistoryId) {
+    throw new Error('startHistoryId is required');
+  }
+
+  try {
+    const now = Date.now();
+    if (now < gmailHistoryBlockedUntilMs) {
+      const err: any = new Error(
+        `[Gmail] Rate limited; retry after ${new Date(gmailHistoryBlockedUntilMs).toISOString()}`
+      );
+      err.code = 429;
+      err.retryAfterMs = gmailHistoryBlockedUntilMs;
+      throw err;
+    }
+
+    const messageIds = new Set<string>();
+    let pageToken: string | undefined = undefined;
+    let pages = 0;
+    const maxPages = Math.max(1, Number(params.maxPages ?? 10));
+
+    while (true) {
+      pages++;
+      if (pages > maxPages) {
+        break;
+      }
+
+      const response: any = await gmailClient.users.history.list({
+        userId: 'me',
+        startHistoryId,
+        pageToken,
+        labelId: params.labelId,
+        historyTypes: ['messageAdded', 'labelAdded'],
+        maxResults: 500,
+      });
+
+      const history = response.data.history || [];
+      for (const h of history) {
+        const added = h.messagesAdded || [];
+        for (const a of added) {
+          const id = a?.message?.id;
+          if (id) messageIds.add(String(id));
+        }
+
+        const labelAdded = h.labelsAdded || [];
+        for (const la of labelAdded) {
+          const id = la?.message?.id;
+          if (id) messageIds.add(String(id));
+        }
+      }
+
+      pageToken = response.data.nextPageToken || undefined;
+      if (!pageToken) {
+        break;
+      }
+    }
+
+    return { messageIds: Array.from(messageIds) };
+  } catch (error: any) {
+    const status = error?.code ?? error?.response?.status;
+    if (status === 429) {
+      const retryAfterMs = parseRetryAfterMs(error);
+      if (retryAfterMs) {
+        gmailHistoryBlockedUntilMs = Math.max(gmailHistoryBlockedUntilMs, retryAfterMs);
+        (error as any).retryAfterMs = gmailHistoryBlockedUntilMs;
+      } else {
+        gmailHistoryBlockedUntilMs = Math.max(gmailHistoryBlockedUntilMs, Date.now() + 10 * 60 * 1000);
+        (error as any).retryAfterMs = gmailHistoryBlockedUntilMs;
+      }
+    }
+
+    console.error('[Gmail] Failed to list history:', error.message);
     throw error;
   }
 }
