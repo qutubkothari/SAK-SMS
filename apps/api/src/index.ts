@@ -27,10 +27,18 @@ app.use(routes);
 app.use(errorHandler);
 
 // Configure email service if credentials are provided
-if (process.env.IMAP_HOST && process.env.SMTP_HOST) {
+const gmailPubSubConfigured = Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN);
+const imapPollingEnabled =
+  Boolean(process.env.IMAP_HOST && process.env.SMTP_HOST) &&
+  (process.env.EMAIL_POLL_ENABLED === 'true' || (!gmailPubSubConfigured && process.env.EMAIL_POLL_ENABLED !== 'false'));
+
+if (imapPollingEnabled) {
+  const imapHost = process.env.IMAP_HOST as string;
+  const smtpHost = process.env.SMTP_HOST as string;
+
   configureEmail({
     imap: {
-      host: process.env.IMAP_HOST,
+      host: imapHost,
       port: Number(process.env.IMAP_PORT || 993),
       secure: process.env.IMAP_SECURE !== 'false',
       auth: {
@@ -39,7 +47,7 @@ if (process.env.IMAP_HOST && process.env.SMTP_HOST) {
       },
     },
     smtp: {
-      host: process.env.SMTP_HOST,
+      host: smtpHost,
       port: Number(process.env.SMTP_PORT || 587),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
@@ -95,6 +103,12 @@ if (process.env.IMAP_HOST && process.env.SMTP_HOST) {
   setInterval(pollEmailsTask, pollInterval * 60 * 1000);
 
   console.log(`[Email] Service configured (polling every ${pollInterval} minutes)`);
+} else {
+  if (gmailPubSubConfigured) {
+    console.log('[Email] IMAP polling disabled (Gmail Pub/Sub is configured)');
+  } else if (process.env.EMAIL_POLL_ENABLED === 'false') {
+    console.log('[Email] IMAP polling disabled (EMAIL_POLL_ENABLED=false)');
+  }
 }
 
 // Configure Gmail Pub/Sub if credentials are provided
