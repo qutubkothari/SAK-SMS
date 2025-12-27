@@ -3743,7 +3743,8 @@ routes.post(
     const { pollEmails } = await import('./services/email.js');
 
     const keywords = getEmailEnquiryKeywords();
-    const requireKeywordMatch = keywords.length > 0;
+    const requireKeywordMatch =
+      keywords.length > 0 && String(process.env.EMAIL_ENQUIRY_REQUIRE_KEYWORDS ?? '1').toLowerCase() !== '0';
     
     const emails: any[] = [];
     try {
@@ -3827,7 +3828,8 @@ routes.post(
       let skipped = 0;
 
       const keywords = getEmailEnquiryKeywords();
-      const requireKeywordMatch = keywords.length > 0;
+      const requireKeywordMatch =
+        keywords.length > 0 && String(process.env.EMAIL_ENQUIRY_REQUIRE_KEYWORDS ?? '1').toLowerCase() !== '0';
 
       for (const msg of messages) {
         try {
