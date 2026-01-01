@@ -12,8 +12,9 @@ where "channel" = 'EMAIL'
 order by "createdAt" desc
 limit 10;
 
-select "id", "tenantId", "channel", "role", "leadId", "createdAt"
+select "id", "tenantId", "channel", "direction", "leadId", "createdAt", left("body", 160) as body_preview
 from "Message"
 where "channel" = 'EMAIL'
 order by "createdAt" desc
 limit 10;
+
