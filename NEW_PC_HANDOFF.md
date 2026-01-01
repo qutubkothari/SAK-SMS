@@ -5,16 +5,17 @@
 - Default branch in this workspace: `master`
 
 ## Production EC2 (Current)
-- Public IP: `13.203.69.128`
+- Public IP: `13.204.88.29`
 - SSH user: `ubuntu`
-- PEM key filename: `sak-sms-2.pem`
+- PEM key filename: `sak-sms-2026.pem`
   - IMPORTANT: the private key must NOT be committed to GitHub.
   - This repo already ignores `*.pem` via `.gitignore`; copy the key manually to the new PC.
+  - Current location: root directory of workspace
 
 ### Common SSH commands
 From Windows PowerShell:
 ```powershell
-ssh -i "C:\path\to\sak-sms-2.pem" -o StrictHostKeyChecking=accept-new ubuntu@13.203.69.128
+ssh -i "sak-sms-2026.pem" -o StrictHostKeyChecking=accept-new ubuntu@13.204.88.29
 ```
 
 Tail API logs (PM2):
@@ -90,12 +91,12 @@ Script: `deploy/ec2/deploy-from-local.ps1`
 Example:
 ```powershell
 pwsh -File .\deploy\ec2\deploy-from-local.ps1 \
-  -Server 13.203.69.128 \
+  -Server 13.204.88.29 \
   -User ubuntu \
   -AppDir /opt/sak-ai-enquiry-handler \
   -Branch master \
   -RepoUrl https://github.com/qutubkothari/SAK-SMS.git \
-  -KeyPath "C:\\path\\to\\sak-sms-2.pem"
+  -KeyPath ".\sak-sms-2026.pem"
 ```
 
 Notes:
