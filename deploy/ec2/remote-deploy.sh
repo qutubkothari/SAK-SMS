@@ -57,7 +57,21 @@ echo "==> Prisma generate + migrate deploy"
 
 echo "==> Building"
 # tsc/vite builds can OOM on small instances; set a bigger Node heap just for build.
-BUILD_HEAP_MB=${NODE_BUILD_HEAP_MB:-3072}
+# But don't exceed a safe fraction of system memory (can lock up small EC2 instances).
+DEFAULT_BUILD_HEAP_MB=3072
+BUILD_HEAP_MB=${NODE_BUILD_HEAP_MB:-$DEFAULT_BUILD_HEAP_MB}
+
+if [ -r /proc/meminfo ]; then
+  MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  # Use up to ~75% of RAM for V8 heap to leave room for OS + other processes.
+  SAFE_MB=$(( MEM_MB * 75 / 100 ))
+  if [ -n "${MEM_MB:-}" ] && [ "$MEM_MB" -gt 0 ] && [ "$SAFE_MB" -gt 256 ]; then
+    if [ "$BUILD_HEAP_MB" -gt "$SAFE_MB" ]; then
+      echo "==> Adjusting build heap: requested ${BUILD_HEAP_MB}MB, system ${MEM_MB}MB -> using ${SAFE_MB}MB"
+      BUILD_HEAP_MB=$SAFE_MB
+    fi
+  fi
+fi
 if [ -n "${NODE_OPTIONS:-}" ]; then
   export NODE_OPTIONS="$NODE_OPTIONS --max-old-space-size=$BUILD_HEAP_MB"
 else
@@ -68,19 +82,28 @@ npm run -ws build
 
 echo "==> Publish web to Nginx"
 if command -v sudo >/dev/null 2>&1; then
-  sudo mkdir -p /var/www/html
-  # Replace contents atomically-ish
-  sudo rm -rf /var/www/html/*
-  sudo cp -r apps/web/dist/* /var/www/html/
+  WEB_ROOT=${WEB_ROOT:-/var/www/html}
+  NGINX_SITE_NAME=${NGINX_SITE_NAME:-sak-sms}
+  NGINX_SITE_CONF=${NGINX_SITE_CONF:-deploy/ec2/nginx-site.conf}
 
-  if [ -f "deploy/ec2/nginx-site.conf" ]; then
-    sudo cp deploy/ec2/nginx-site.conf /etc/nginx/sites-available/sak-sms
-    sudo ln -sf /etc/nginx/sites-available/sak-sms /etc/nginx/sites-enabled/sak-sms
-    sudo rm -f /etc/nginx/sites-enabled/default || true
+  sudo mkdir -p "$WEB_ROOT"
+  # Replace contents atomically-ish
+  sudo rm -rf "$WEB_ROOT"/*
+  sudo cp -r apps/web/dist/* "$WEB_ROOT"/
+
+  if [ -f "$NGINX_SITE_CONF" ]; then
+    sudo cp "$NGINX_SITE_CONF" "/etc/nginx/sites-available/$NGINX_SITE_NAME"
+    sudo ln -sf "/etc/nginx/sites-available/$NGINX_SITE_NAME" "/etc/nginx/sites-enabled/$NGINX_SITE_NAME"
+
+    # On shared servers, don't disable other sites by default.
+    if [ "${REMOVE_DEFAULT_SITE:-0}" = "1" ]; then
+      sudo rm -f /etc/nginx/sites-enabled/default || true
+    fi
+
     sudo nginx -t
     sudo systemctl reload nginx || sudo systemctl restart nginx
   else
-    echo "WARN: deploy/ec2/nginx-site.conf not found; skipping nginx config update" >&2
+    echo "WARN: $NGINX_SITE_CONF not found; skipping nginx config update" >&2
   fi
 else
   echo "WARN: sudo not available; skipping Nginx publish/config" >&2

@@ -311,6 +311,100 @@
 			],
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Smoke: EC2 Health",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$ip='13.201.185.222'; Write-Host ('IP='+$ip); Write-Host '--- PORTS'; Test-NetConnection $ip -Port 22 | Select-Object -ExpandProperty TcpTestSucceeded; Test-NetConnection $ip -Port 80 | Select-Object -ExpandProperty TcpTestSucceeded; Write-Host '--- HTTP /'; try { $r=Invoke-WebRequest -UseBasicParsing -Uri (\"http://$ip/\") -TimeoutSec 8; Write-Host ('status='+$r.StatusCode); } catch { Write-Host ('FAILED '+$_.Exception.Message) }; Write-Host '--- HTTP /api/health'; try { $r2=Invoke-WebRequest -UseBasicParsing -Uri (\"http://$ip/api/health\") -TimeoutSec 8; Write-Host ('status='+$r2.StatusCode); Write-Host $r2.Content; } catch { Write-Host ('FAILED '+$_.Exception.Message) }; Write-Host '--- SSH local /api/health'; ssh -i sak-sms-2026.pem -o BatchMode=yes -o ConnectTimeout=10 ubuntu@$ip \"curl -sS -m 6 http://127.0.0.1/api/health || true; echo '---'; curl -sS -m 6 http://127.0.0.1:4000/api/health || true\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke: EC2 Health v2",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$ip='13.201.185.222'; Write-Host ('IP='+$ip); Write-Host '--- PORTS'; Test-NetConnection $ip -Port 22 | Select-Object -ExpandProperty TcpTestSucceeded; Test-NetConnection $ip -Port 80 | Select-Object -ExpandProperty TcpTestSucceeded; Write-Host '--- HTTP /'; try { $r=Invoke-WebRequest -UseBasicParsing -Uri (\"http://$ip/\") -TimeoutSec 8; Write-Host ('status='+$r.StatusCode) } catch { Write-Host ('FAILED '+$_.Exception.Message) }; Write-Host '--- HTTP /api/health'; try { $r2=Invoke-WebRequest -UseBasicParsing -Uri (\"http://$ip/api/health\") -TimeoutSec 8; Write-Host ('status='+$r2.StatusCode); Write-Host $r2.Content } catch { Write-Host ('FAILED '+$_.Exception.Message) }; Write-Host '--- SSH local checks'; $remote='curl -sS -m 6 http://127.0.0.1/api/health; echo ---; curl -sS -m 6 http://127.0.0.1:4000/api/health'; ssh.exe -i sak-sms-2026.pem -o BatchMode=yes -o ConnectTimeout=10 (\"ubuntu@\"+$ip) $remote"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke: HTTP only",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"curl -i --max-time 8 http://13.201.185.222/api/health && echo --- && curl -I --max-time 8 http://13.201.185.222/"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke: HTTP root",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"curl -I --max-time 8 http://13.201.185.222/"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Smoke: SSH echo",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"ssh -i sak-sms-2026.pem -o BatchMode=yes -o ConnectTimeout=8 ubuntu@13.201.185.222 \"echo SSH_OK\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check: EC2 reachable (new IP)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$ip='13.201.185.222'; '22='+(Test-NetConnection $ip -Port 22).TcpTestSucceeded; '80='+(Test-NetConnection $ip -Port 80).TcpTestSucceeded; try { (Invoke-WebRequest -UseBasicParsing -Uri (\"http://$ip/\") -TimeoutSec 6).StatusCode } catch { 'HTTP_ROOT_FAIL' };"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Check: EC2 reachable (cmd)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"powershell -NoProfile -Command \"$ip='13.201.185.222'; Write-Host ('22='+(Test-NetConnection $ip -Port 22).TcpTestSucceeded); Write-Host ('80='+(Test-NetConnection $ip -Port 80).TcpTestSucceeded); try { $r=Invoke-WebRequest -UseBasicParsing -Uri ('http://'+$ip+'/') -TimeoutSec 6; Write-Host ('http='+$r.StatusCode) } catch { Write-Host 'http=FAIL' }\""
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Check: EC2 reachable (no quotes)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"powershell -NoProfile -Command \"$ip=\\\"13.201.185.222\\\"; Write-Host (\\\"22=\\\" + (Test-NetConnection $ip -Port 22).TcpTestSucceeded); Write-Host (\\\"80=\\\" + (Test-NetConnection $ip -Port 80).TcpTestSucceeded); try { $r=Invoke-WebRequest -UseBasicParsing -Uri (\\\"http://\\\"+$ip+\\\"/\\\") -TimeoutSec 6; Write-Host (\\\"http=\\\"+$r.StatusCode) } catch { Write-Host \\\"http=FAIL\\\" }\""
+			],
+			"isBackground": false
 		}
 	]
 }

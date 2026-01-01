@@ -453,15 +453,22 @@ routes.post(
 
     const body = z
       .object({
-        email: z.string().email(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
         password: z.string().min(1)
+      })
+      .refine(data => data.email || data.phone, {
+        message: 'Either email or phone is required'
       })
       .parse(req.body);
 
     const user = await prisma.user.findFirst({
       where: {
         ...(headerTenantId ? { tenantId: headerTenantId } : {}),
-        email: body.email,
+        OR: [
+          ...(body.email ? [{ email: body.email }] : []),
+          ...(body.phone ? [{ phone: body.phone }] : [])
+        ],
         active: true
       }
     });

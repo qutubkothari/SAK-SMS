@@ -5,7 +5,13 @@ param(
   [Parameter()] [string] $AppDir = $(if ($env:EC2_APP_DIR) { $env:EC2_APP_DIR } else { '/opt/sak-ai-enquiry-handler' }),
   [Parameter()] [string] $Branch = $(if ($env:EC2_BRANCH) { $env:EC2_BRANCH } else { 'main' }),
   [Parameter()] [string] $RepoUrl = $(if ($env:EC2_REPO_URL) { $env:EC2_REPO_URL } else { '' }),
-  [Parameter()] [string] $KeyPath = $(if ($env:EC2_KEY_PATH) { $env:EC2_KEY_PATH } else { '' })
+  [Parameter()] [string] $KeyPath = $(if ($env:EC2_KEY_PATH) { $env:EC2_KEY_PATH } else { '' }),
+
+  # Optional: shared-server safe Nginx publish/config settings
+  [Parameter()] [string] $WebRoot = $(if ($env:WEB_ROOT) { $env:WEB_ROOT } else { '' }),
+  [Parameter()] [string] $NginxSiteName = $(if ($env:NGINX_SITE_NAME) { $env:NGINX_SITE_NAME } else { '' }),
+  [Parameter()] [string] $NginxSiteConf = $(if ($env:NGINX_SITE_CONF) { $env:NGINX_SITE_CONF } else { '' }),
+  [Parameter()] [string] $RemoveDefaultSite = $(if ($env:REMOVE_DEFAULT_SITE) { $env:REMOVE_DEFAULT_SITE } else { '' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,7 +42,7 @@ if (-not [string]::IsNullOrWhiteSpace($KeyPath)) {
 $target = "$User@$Server"
 
 Write-Host "==> Ensuring remote deploy dir: $AppDir/deploy/ec2"
-& ssh @sshArgs $target "mkdir -p $AppDir/deploy/ec2" | Out-Host
+& ssh @sshArgs $target "sudo mkdir -p $AppDir/deploy/ec2 && sudo chown -R ${User}:${User} $AppDir" | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "ssh failed (mkdir). Exit code: $LASTEXITCODE" }
 
 Write-Host "==> Uploading deploy scripts"
@@ -45,10 +51,24 @@ Write-Host "==> Uploading deploy scripts"
 if ($LASTEXITCODE -ne 0) { throw "scp failed (upload deploy scripts). Exit code: $LASTEXITCODE" }
 
 Write-Host "==> Running remote deploy (pulls from GitHub and restarts services)"
-$remoteCmd = @(
+$remoteEnv = @(
+  "APP_DIR=$AppDir",
+  "BRANCH=$Branch",
+  "REPO_URL=$RepoUrl"
+)
+if (-not [string]::IsNullOrWhiteSpace($WebRoot)) { $remoteEnv += "WEB_ROOT=$WebRoot" }
+if (-not [string]::IsNullOrWhiteSpace($NginxSiteName)) { $remoteEnv += "NGINX_SITE_NAME=$NginxSiteName" }
+if (-not [string]::IsNullOrWhiteSpace($NginxSiteConf)) { $remoteEnv += "NGINX_SITE_CONF=$NginxSiteConf" }
+if (-not [string]::IsNullOrWhiteSpace($RemoveDefaultSite)) { $remoteEnv += "REMOVE_DEFAULT_SITE=$RemoveDefaultSite" }
+
+
+$remoteCmdInner = @(
   "chmod +x $AppDir/deploy/ec2/remote-deploy.sh",
-  "APP_DIR=$AppDir BRANCH=$Branch REPO_URL=$RepoUrl $AppDir/deploy/ec2/remote-deploy.sh"
+  "env " + ($remoteEnv -join ' ') + " $AppDir/deploy/ec2/remote-deploy.sh"
 ) -join ' && '
+
+# Execute via bash so env assignments + chaining behave consistently.
+$remoteCmd = "bash -lc '$remoteCmdInner'"
 
 & ssh @sshArgs $target $remoteCmd | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "ssh failed (remote deploy). Exit code: $LASTEXITCODE" }

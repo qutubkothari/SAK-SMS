@@ -5,7 +5,7 @@
 - Default branch in this workspace: `master`
 
 ## Production EC2 (Current)
-- Public IP: `13.204.88.29`
+- Public IP: `13.201.185.222`
 - SSH user: `ubuntu`
 - PEM key filename: `sak-sms-2026.pem`
   - IMPORTANT: the private key must NOT be committed to GitHub.
@@ -15,7 +15,7 @@
 ### Common SSH commands
 From Windows PowerShell:
 ```powershell
-ssh -i "sak-sms-2026.pem" -o StrictHostKeyChecking=accept-new ubuntu@13.204.88.29
+ssh -i "sak-sms-2026.pem" -o StrictHostKeyChecking=accept-new ubuntu@13.201.185.222
 ```
 
 Tail API logs (PM2):
@@ -91,7 +91,7 @@ Script: `deploy/ec2/deploy-from-local.ps1`
 Example:
 ```powershell
 pwsh -File .\deploy\ec2\deploy-from-local.ps1 \
-  -Server 13.204.88.29 \
+  -Server 13.201.185.222 \
   -User ubuntu \
   -AppDir /opt/sak-ai-enquiry-handler \
   -Branch master \
