@@ -11,7 +11,11 @@ coverage/
 # Never commit SSH keys
 *.pem
 *.pem.*
+*.key
 id_rsa
 id_rsa.*
 id_ed25519
 id_ed25519.*
+
+# Repo-specific key filenames
+my-new-ec2-key
